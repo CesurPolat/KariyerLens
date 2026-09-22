@@ -1,5 +1,6 @@
 const GET_JOB = "GET_JOB";
 const APPLICATION_COUNT_SELECTOR = '[data-test="job-application-count"]';
+const UPDATED_DATE_SELECTOR = '[data-test="updated-date"]';
 const NATIVE_SYNC_TIMEOUT_MS = 8_000;
 
 let lastRequestedJobId = "";
@@ -46,6 +47,51 @@ function syncNativeApplicationCount(applicationCount) {
   setTimeout(() => nativeCountObserver?.disconnect(), NATIVE_SYNC_TIMEOUT_MS);
 }
 
+function formatPublishedAt(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "2-digit", month: "short",
+  }).format(date);
+}
+
+function shortDate(value) {
+  const match = value?.match(/^(\d{1,2})\s+(\S+)/);
+  if (!match) return value || "—";
+  const months = {
+    Ocak: "Oca", Şubat: "Şub", Mart: "Mar", Nisan: "Nis",
+    Mayıs: "May", Haziran: "Haz", Temmuz: "Tem", Ağustos: "Ağu",
+    Eylül: "Eyl", Ekim: "Eki", Kasım: "Kas", Aralık: "Ara",
+  };
+  return `${match[1]} ${months[match[2]] || match[2].slice(0, 3)}`;
+}
+
+function updateNativeDateInfo(data) {
+  const dateElement = document.querySelector(UPDATED_DATE_SELECTOR);
+  if (!dateElement) return false;
+
+  const jobDateText = data.jobDateText || "";
+  const details = [
+    `Yay: ${formatPublishedAt(data.publishedAt)}`,
+    `Bit: ${shortDate(data.closingDate)}`,
+    ...(jobDateText ? [jobDateText] : []),
+    `v${data.updateCount || "—"}`,
+  ].join(" · ");
+  dateElement.textContent = details;
+  dateElement.dataset.kariyerLensUpdated = "true";
+  return true;
+}
+
+function syncNativeDateInfo(data) {
+  if (updateNativeDateInfo(data)) return;
+  const observer = new MutationObserver(() => {
+    if (updateNativeDateInfo(data)) observer.disconnect();
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  setTimeout(() => observer.disconnect(), NATIVE_SYNC_TIMEOUT_MS);
+}
+
 async function loadCurrentJob() {
   const jobId = findJobId();
   if (!jobId || jobId === lastRequestedJobId) return;
@@ -53,7 +99,10 @@ async function loadCurrentJob() {
 
   try {
     const response = await chrome.runtime.sendMessage({ type: GET_JOB, jobId });
-    if (response?.ok) syncNativeApplicationCount(response.data.applicationCount);
+    if (response?.ok) {
+      syncNativeApplicationCount(response.data.applicationCount);
+      syncNativeDateInfo(response.data);
+    }
   } catch {
     // No extension UI: leave the native page unchanged when the request fails.
   }
