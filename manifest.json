@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "KariyerLens",
+  "description": "Kariyer.net ilan verisini sayfa üzerinde görüntüler.",
+  "version": "0.1.0",
+  "permissions": ["storage"],
+  "host_permissions": ["https://candidatesearchapigateway.kariyer.net/*"],
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.kariyer.net/*"],
+      "js": ["src/content/content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "KariyerLens"
+  }
+}
