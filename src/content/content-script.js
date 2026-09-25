@@ -1,6 +1,9 @@
 const GET_JOB = "GET_JOB";
 const APPLICATION_COUNT_SELECTOR = '[data-test="job-application-count"]';
 const UPDATED_DATE_SELECTOR = '[data-test="updated-date"]';
+const APPLICATION_REVIEW_SELECTOR = '[data-test="job-application-view-day"]';
+const JOB_FEATURE_LIST_SELECTOR = '[data-test="job-feature-list"]';
+const JOB_DETAIL_MAIN_SELECTOR = ".job-detail-body-main";
 const NATIVE_SYNC_TIMEOUT_MS = 8_000;
 
 let lastRequestedJobId = "";
@@ -92,6 +95,85 @@ function syncNativeDateInfo(data) {
   setTimeout(() => observer.disconnect(), NATIVE_SYNC_TIMEOUT_MS);
 }
 
+function updateNativeApplicationReviewInfo(applicationReviewText) {
+  if (!applicationReviewText) return false;
+  const mainContainer = document.querySelector(
+    `${JOB_DETAIL_MAIN_SELECTOR} .job-detail-ad-headline .main-container`,
+  );
+  if (!mainContainer) return false;
+
+  document
+    .querySelectorAll(`${APPLICATION_REVIEW_SELECTOR}[data-kariyer-lens-updated="true"]`)
+    .forEach((element) => {
+      if (!mainContainer.contains(element)) element.remove();
+    });
+
+  let reviewElement = mainContainer.querySelector(APPLICATION_REVIEW_SELECTOR);
+  if (!reviewElement) {
+    reviewElement = document.createElement("div");
+    reviewElement.className = "job-application-view-day";
+    reviewElement.dataset.test = "job-application-view-day";
+    reviewElement.dataset.kariyerLensCreated = "true";
+    Object.assign(reviewElement.style, {
+      fontSize: "14px",
+      fontWeight: "500",
+      lineHeight: "20px",
+      marginBottom: "16px",
+    });
+    const jobFeatures = mainContainer.querySelector(".job-features");
+    if (jobFeatures) {
+      jobFeatures.insertAdjacentElement("afterend", reviewElement);
+    } else {
+      mainContainer.append(reviewElement);
+    }
+  }
+  reviewElement.textContent = applicationReviewText;
+  reviewElement.dataset.kariyerLensUpdated = "true";
+  return true;
+}
+
+function syncNativeApplicationReviewInfo(applicationReviewText) {
+  if (updateNativeApplicationReviewInfo(applicationReviewText)) return;
+  const observer = new MutationObserver(() => {
+    if (updateNativeApplicationReviewInfo(applicationReviewText)) observer.disconnect();
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  setTimeout(() => observer.disconnect(), NATIVE_SYNC_TIMEOUT_MS);
+}
+
+function updateNativePositionFeature(position) {
+  if (!position) return false;
+  document
+    .querySelectorAll('[data-kariyer-lens-feature="position"]')
+    .forEach((element) => {
+      if (!element.closest(JOB_DETAIL_MAIN_SELECTOR)) element.remove();
+    });
+  const featureList = document.querySelector(
+    `${JOB_DETAIL_MAIN_SELECTOR} ${JOB_FEATURE_LIST_SELECTOR}`,
+  );
+  if (!featureList) return false;
+
+  let positionElement = featureList.querySelector('[data-kariyer-lens-feature="position"]');
+  if (!positionElement) {
+    positionElement = document.createElement("span");
+    positionElement.className = "job-feature-item";
+    positionElement.dataset.test = "job-feature-item";
+    positionElement.dataset.kariyerLensFeature = "position";
+    featureList.append(positionElement);
+  }
+  positionElement.textContent = position;
+  return true;
+}
+
+function syncNativePositionFeature(position) {
+  if (updateNativePositionFeature(position)) return;
+  const observer = new MutationObserver(() => {
+    if (updateNativePositionFeature(position)) observer.disconnect();
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  setTimeout(() => observer.disconnect(), NATIVE_SYNC_TIMEOUT_MS);
+}
+
 async function loadCurrentJob() {
   const jobId = findJobId();
   if (!jobId || jobId === lastRequestedJobId) return;
@@ -102,6 +184,8 @@ async function loadCurrentJob() {
     if (response?.ok) {
       syncNativeApplicationCount(response.data.applicationCount);
       syncNativeDateInfo(response.data);
+      syncNativeApplicationReviewInfo(response.data.applicationReviewText);
+      syncNativePositionFeature(response.data.position);
     }
   } catch {
     // No extension UI: leave the native page unchanged when the request fails.

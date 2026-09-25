@@ -53,6 +53,7 @@ export function normalizeJob(raw, jobId) {
     jobDateStatus: asText(general.jobDateStatus),
     closingDate: asText(general.closingDate),
     updateCount: asText(general.versionId),
+    applicationReviewText: asText(general.jobApplicationViewDayWithText),
     qualifications: asText(general.qualifications),
     applicationCount: asText(statistics?.totalApplication),
     experience: asText(criteria?.experienceText),
