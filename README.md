@@ -14,7 +14,8 @@ Kariyer.net ilan sayfasında otomatik çalışan, API'den aldığı başvuru say
 - Uzantı ilan URL'sinden sayısal `jobId` algıladığında sabit Kariyer.net API adresine istek yollar.
 - Başarılı yanıtlar beş dakika boyunca bellek içinde önbelleğe alınır.
 - Başarılı yanıttaki `jobIstatistics.totalApplication` değeri, sayfadaki `[data-test="job-application-count"]` alanına yazılır.
-- Yayın, son güncelleme ve son başvuru tarihi `[data-test="updated-date"]` alanında gösterilir. Güncelleme sayısı olarak `jobGeneralInformation.versionId` kullanılır.
+- Yayın, son başvuru tarihi, yayınlanma süresi ve güncelleme sayısı `.job-features` bloğunun hemen altında KariyerLens tarafından oluşturulan ayrı bir bilgi bloğunda gösterilir. Güncelleme sayısı olarak `jobGeneralInformation.versionId` kullanılır; sayfanın native `[data-test="updated-date"]` alanı değiştirilmez.
+- Aynı bilgi bloğunda başvuru yoğunluğu `toplam başvuru ÷ ilanın açık kaldığı gün` formülüyle hesaplanır; günlük yaklaşık başvuru hızı ve ilanın aktif aday havuzu oluşturduğu açıklaması gösterilir.
 - `jobGeneralInformation.jobApplicationViewDayWithText` değeriyle şirketin başvuruları en son ne zaman incelediği gösterilir.
 - `jobPositionInformation.positionName`, mevcut `job-feature-list` içine yerel görünümde bir pozisyon etiketi olarak eklenir.
 - 401/403, CAPTCHA/bot koruması, 404, rate limit ve JSON şema hatalarında sayfanın mevcut görünümü değiştirilmez.
