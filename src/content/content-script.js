@@ -97,8 +97,19 @@ function getApplicationInsight(data) {
   };
 }
 
+function getPublishedScore(openDays) {
+  return openDays <= 1 ? 70
+    : openDays <= 3 ? 60
+      : openDays <= 7 ? 55
+        : openDays <= 14 ? 45
+          : openDays <= 30 ? 30
+            : openDays <= 60 ? 15
+              : 5;
+}
+
 function getHiringActivity(data, insight) {
   const review = String(data.applicationReviewText || "").toLocaleLowerCase("tr-TR");
+  const applicationCount = parseApplicationCount(data.applicationCount);
   let reviewDays = null;
   if (/bugün|az önce|saat|dakika/.test(review)) reviewDays = 0;
   else if (/dün/.test(review)) reviewDays = 1;
@@ -110,26 +121,37 @@ function getHiringActivity(data, insight) {
   if (reviewDays === null) {
     return { score: null, label: "Devir bilgisi yetersiz", copy: "Şirketin son başvuru inceleme zamanı bilinmiyor.", color: "#94a3b8" };
   }
-  // Employer review recency carries most of the weight; candidate interest alone is not hiring activity.
-  const reviewScore = reviewDays <= 1 ? 75 : reviewDays <= 3 ? 60 : reviewDays <= 7 ? 40 : reviewDays <= 14 ? 20 : 5;
-  const interestScore = insight ? Math.min(15, insight.applicationsPerDay) : 0;
-  const agePenalty = insight?.openDays > 60 && reviewDays > 7 ? 10 : 0;
-  const score = Math.max(0, Math.min(100, Math.round(reviewScore + interestScore - agePenalty)));
-  const applicationCount = parseApplicationCount(data.applicationCount);
-  const likelyPoolListing = insight?.openDays > 60 && applicationCount >= 1000;
+  // PublishedAt is the primary signal. Review recency only supports the estimate;
+  // a recent review cannot make an old, high-volume listing look highly active.
+  const publishedScore = getPublishedScore(insight.openDays);
+  const reviewScore = reviewDays <= 1 ? 25 : reviewDays <= 3 ? 20 : reviewDays <= 7 ? 12 : reviewDays <= 14 ? 6 : 0;
+  const reviewIsStale = reviewDays > 7;
+  const reviewFollowUpCopy = "İşveren Kariyer.net başvurularını aktif takip etmiyor olabilir; doğrudan iletişime geçmek daha mantıklı olabilir.";
+  const competitionPenalty = applicationCount >= 1500 ? 5 : applicationCount >= 750 ? 2 : 0;
+  const competitionWarning = applicationCount >= 1500
+    ? "Başvuru sayısı çok yüksek; bu ilanda rekabet yoğun olabilir."
+    : applicationCount >= 750
+      ? "Başvuru sayısı yüksek; rekabet artmış olabilir."
+      : "";
+  const withCompetitionWarning = (copy) => competitionWarning ? `${copy} ${competitionWarning}` : copy;
+  const likelyPoolListing = insight.openDays > 60 && applicationCount >= 1500;
+  const poolRiskPenalty = likelyPoolListing ? 10 : 0;
+  const score = Math.max(0, Math.min(100, Math.round(publishedScore + reviewScore - poolRiskPenalty - competitionPenalty)));
   if (likelyPoolListing) {
     return {
       score: Math.min(score, 34),
-      label: "Düşük devir",
-      color: "#f59e0b",
-      copy: "Alım hareketliliği düşük görünüyor. İlan aday havuzu topluyor olabilir.",
+      label: "Çok düşük devir",
+      color: "#dc2626",
+      copy: withCompetitionWarning("Alım sinyali çok zayıf. İlanın aday havuzu toplama olasılığı yüksek; başvurmadan önce dikkatli değerlendirin."),
     };
   }
-  return score < 35
-    ? { score, label: "Düşük devir", color: "#f59e0b", copy: "Alım hareketliliği düşük görünüyor. İlan aday havuzu topluyor olabilir." }
-    : score < 65
-      ? { score, label: "Orta devir", color: "#8b5cf6", copy: "Başvurular aralıklı inceleniyor; alım süreci yavaş ilerliyor olabilir." }
-      : { score, label: "Yüksek devir", color: "#10b981", copy: "Başvurular yakın zamanda incelenmiş. Alım süreci hareketli görünüyor." };
+  return score <= 34
+    ? { score, label: "Çok düşük devir", color: "#dc2626", copy: withCompetitionWarning(reviewIsStale ? reviewFollowUpCopy : "Alım sinyali çok zayıf. İlanın aday havuzu toplama olasılığı yüksek; başvurmadan önce dikkatli değerlendirin.") }
+    : score < 50
+      ? { score, label: "Düşük devir", color: "#f59e0b", copy: withCompetitionWarning(reviewIsStale ? reviewFollowUpCopy : "Alım hareketliliği düşük görünüyor; süreç yavaş ilerliyor olabilir.") }
+      : score < 65
+        ? { score, label: "Orta devir", color: "#8b5cf6", copy: withCompetitionWarning("Başvurular aralıklı inceleniyor; alım süreci yavaş ilerliyor olabilir.") }
+        : { score, label: "Yüksek devir", color: "#10b981", copy: withCompetitionWarning("Başvurular yakın zamanda incelenmiş. Alım süreci hareketli görünüyor.") };
 }
 
 function createHiringGauge(data, insight) {
@@ -155,9 +177,9 @@ function createHiringGauge(data, insight) {
     const angle = Math.PI * (1 - value / 100);
     return [140 + radius * Math.cos(angle), 130 - radius * Math.sin(angle)];
   };
-  for (const [start, end, color] of [[0, 33, "#f59e0b"], [35, 63, "#8b5cf6"], [65, 100, "#10b981"]]) {
+  for (const [start, end, color] of [[0, 35, "#dc2626"], [35, 65, "#f59e0b"], [65, 100, "#10b981"]]) {
     const a = point(start, 106), b = point(end, 106);
-    add("path", { d: `M ${a.join(" ")} A 106 106 0 0 1 ${b.join(" ")}`, fill: "none", stroke: color, "stroke-width": 14, "stroke-linecap": "round", opacity: activity.score === null ? 0.25 : 0.85 });
+    add("path", { d: `M ${a.join(" ")} A 106 106 0 0 1 ${b.join(" ")}`, fill: "none", stroke: color, "stroke-width": 14, "stroke-linecap": "butt", opacity: activity.score === null ? 0.25 : 0.85 });
   }
   for (let value = 0; value <= 100; value += 10) {
     const a = point(value, 84), b = point(value, 93);
@@ -297,8 +319,12 @@ function updateNativeDateInfo(data) {
   });
   heading.append(headingCopy);
 
+  const applicationInsight = getApplicationInsight(data);
+  const hiringActivity = getHiringActivity(data, applicationInsight);
   const marketingCopy = document.createElement("div");
-  marketingCopy.textContent = "Bunlar aday havuzu dolduruyor olabilir.";
+  marketingCopy.textContent = hiringActivity.score !== null && hiringActivity.score <= 34
+    ? hiringActivity.copy
+    : "İlan sinyalleri başvuru öncesi değerlendirme için özetleniyor.";
   Object.assign(marketingCopy.style, {
     margin: "0",
     padding: "16px 18px 4px",
@@ -317,7 +343,6 @@ function updateNativeDateInfo(data) {
     padding: "0 18px 18px",
   });
 
-  const applicationInsight = getApplicationInsight(data);
   dateInfo.replaceChildren(
     heading,
     marketingCopy,
