@@ -91,17 +91,113 @@ function getApplicationInsight(data) {
     Math.ceil((Date.now() - publishedAt.getTime()) / 86_400_000),
   );
   const applicationsPerDay = applicationCount / openDays;
-  const roundedRate = applicationsPerDay < 1
-    ? applicationsPerDay.toFixed(1)
-    : formatNumber(Math.round(applicationsPerDay));
-
   return {
-    formula: `Başvuru yoğunluğu = ${formatNumber(applicationCount)} başvuru ÷ ${formatNumber(openDays)} gün`,
-    result: `Günde yaklaşık ${roundedRate} başvuru`,
-    explanation: applicationCount > 0
-      ? "Bu ilan aktif olarak aday havuzu oluşturuyor."
-      : "Henüz başvuru görünmüyor.",
+    applicationsPerDay,
+    openDays,
   };
+}
+
+function getHiringActivity(data, insight) {
+  const review = String(data.applicationReviewText || "").toLocaleLowerCase("tr-TR");
+  let reviewDays = null;
+  if (/bugün|az önce|saat|dakika/.test(review)) reviewDays = 0;
+  else if (/dün/.test(review)) reviewDays = 1;
+  else {
+    const duration = review.match(/(\d+)\s*(gün|hafta|ay)/);
+    if (duration) reviewDays = Number(duration[1]) * ({ gün: 1, hafta: 7, ay: 30 }[duration[2]]);
+  }
+  if (/henüz|incelenmedi|incelemedi/.test(review)) reviewDays = Infinity;
+  if (reviewDays === null) {
+    return { score: null, label: "Devir bilgisi yetersiz", copy: "Şirketin son başvuru inceleme zamanı bilinmiyor.", color: "#94a3b8" };
+  }
+  // Employer review recency carries most of the weight; candidate interest alone is not hiring activity.
+  const reviewScore = reviewDays <= 1 ? 75 : reviewDays <= 3 ? 60 : reviewDays <= 7 ? 40 : reviewDays <= 14 ? 20 : 5;
+  const interestScore = insight ? Math.min(15, insight.applicationsPerDay) : 0;
+  const agePenalty = insight?.openDays > 60 && reviewDays > 7 ? 10 : 0;
+  const score = Math.max(0, Math.min(100, Math.round(reviewScore + interestScore - agePenalty)));
+  const applicationCount = parseApplicationCount(data.applicationCount);
+  const likelyPoolListing = insight?.openDays > 60 && applicationCount >= 1000;
+  if (likelyPoolListing) {
+    return {
+      score: Math.min(score, 34),
+      label: "Düşük devir",
+      color: "#f59e0b",
+      copy: "Alım hareketliliği düşük görünüyor. İlan aday havuzu topluyor olabilir.",
+    };
+  }
+  return score < 35
+    ? { score, label: "Düşük devir", color: "#f59e0b", copy: "Alım hareketliliği düşük görünüyor. İlan aday havuzu topluyor olabilir." }
+    : score < 65
+      ? { score, label: "Orta devir", color: "#8b5cf6", copy: "Başvurular aralıklı inceleniyor; alım süreci yavaş ilerliyor olabilir." }
+      : { score, label: "Yüksek devir", color: "#10b981", copy: "Başvurular yakın zamanda incelenmiş. Alım süreci hareketli görünüyor." };
+}
+
+function createHiringGauge(data, insight) {
+  const activity = getHiringActivity(data, insight);
+  const panel = document.createElement("div");
+  Object.assign(panel.style, { margin: "0 18px 14px", padding: "12px 14px", border: "1px solid #e2e8f0", borderRadius: "8px", background: "#ffffff", color: "#0f172a", textAlign: "left" });
+  const title = document.createElement("strong");
+  title.textContent = "ALIM DEVİR SAATİ";
+  Object.assign(title.style, { display: "block", fontSize: "10px", letterSpacing: "1.5px", color: "#64748b" });
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 280 165");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", `${activity.label}${activity.score === null ? "" : `: ${activity.score}/100`}`);
+  Object.assign(svg.style, { width: "100%", maxWidth: "220px", display: "block", margin: "6px auto 0" });
+  const add = (name, attrs) => {
+    const element = document.createElementNS(ns, name);
+    for (const [key, value] of Object.entries(attrs)) element.setAttribute(key, String(value));
+    svg.append(element);
+    return element;
+  };
+  const point = (value, radius) => {
+    const angle = Math.PI * (1 - value / 100);
+    return [140 + radius * Math.cos(angle), 130 - radius * Math.sin(angle)];
+  };
+  for (const [start, end, color] of [[0, 33, "#f59e0b"], [35, 63, "#8b5cf6"], [65, 100, "#10b981"]]) {
+    const a = point(start, 106), b = point(end, 106);
+    add("path", { d: `M ${a.join(" ")} A 106 106 0 0 1 ${b.join(" ")}`, fill: "none", stroke: color, "stroke-width": 14, "stroke-linecap": "round", opacity: activity.score === null ? 0.25 : 0.85 });
+  }
+  for (let value = 0; value <= 100; value += 10) {
+    const a = point(value, 84), b = point(value, 93);
+    add("line", { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: "#64748b", "stroke-width": 2 });
+  }
+  if (activity.score !== null) {
+    const tip = point(activity.score, 77);
+    add("line", { x1: 140, y1: 130, x2: tip[0], y2: tip[1], stroke: "#0f172a", "stroke-width": 4, "stroke-linecap": "round" });
+  }
+  add("circle", { cx: 140, cy: 130, r: 8, fill: activity.color, stroke: "#0f172a", "stroke-width": 3 });
+  for (const [x, label] of [[35, "DÜŞÜK"], [245, "YÜKSEK"]]) {
+    add("text", { x, y: 157, fill: "#94a3b8", "text-anchor": "middle", "font-size": 10 }).textContent = label;
+  }
+  const visual = document.createElement("div");
+  Object.assign(visual.style, { flex: "0 1 220px", minWidth: "190px", textAlign: "center" });
+  visual.append(svg);
+  const label = document.createElement("strong");
+  label.textContent = `${activity.label}: ${activity.score === null ? "—" : `${activity.score}/100`}`;
+  Object.assign(label.style, { display: "block", color: activity.color, fontSize: "17px", margin: "2px 0 5px" });
+  const header = document.createElement("div");
+  Object.assign(header.style, { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "4px" });
+  header.append(title, label);
+  const details = document.createElement("div");
+  Object.assign(details.style, { flex: "1 1 180px", minWidth: "0", padding: "8px 4px 4px" });
+  const copy = document.createElement("div");
+  copy.textContent = activity.copy;
+  Object.assign(copy.style, { fontSize: "12px", lineHeight: "17px" });
+  const evidence = document.createElement("div");
+  evidence.textContent = data.applicationReviewText || "";
+  Object.assign(evidence.style, { color: "#cbd5e1", fontSize: "11px", marginTop: "8px", lineHeight: "15px" });
+  const note = document.createElement("div");
+  note.textContent = "Son inceleme ve başvuru hızından tahmin edilir; işe alımın kesin göstergesi değildir.";
+  Object.assign(note.style, { color: "#94a3b8", fontSize: "10px", marginTop: "5px", lineHeight: "14px" });
+  details.append(copy, evidence, note);
+
+  const content = document.createElement("div");
+  Object.assign(content.style, { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", marginTop: "4px" });
+  content.append(visual, details);
+  panel.append(header, content);
+  return panel;
 }
 
 function legacyUpdateNativeDateInfo(data) {
@@ -202,7 +298,7 @@ function updateNativeDateInfo(data) {
   heading.append(headingCopy);
 
   const marketingCopy = document.createElement("div");
-  marketingCopy.textContent = "\u0130lan a\u00e7\u0131l\u0131\u015f\u0131 ve ba\u015fvuru yo\u011funlu\u011fu";
+  marketingCopy.textContent = "Bunlar aday havuzu dolduruyor olabilir.";
   Object.assign(marketingCopy.style, {
     margin: "0",
     padding: "16px 18px 4px",
@@ -222,35 +318,11 @@ function updateNativeDateInfo(data) {
   });
 
   const applicationInsight = getApplicationInsight(data);
-  let insightElement = null;
-  if (applicationInsight) {
-    insightElement = document.createElement("div");
-    Object.assign(insightElement.style, {
-      margin: "0 18px 18px",
-      padding: "13px 14px",
-      border: "1px solid #c4b5fd",
-      borderRadius: "6px",
-      background: "#faf5ff",
-      color: "#4c1d95",
-      fontSize: "13px",
-      lineHeight: "19px",
-    });
-
-    const formula = document.createElement("strong");
-    formula.textContent = applicationInsight.formula;
-    formula.style.display = "block";
-    insightElement.append(formula);
-
-    const result = document.createElement("span");
-    result.textContent = `${applicationInsight.result}. ${applicationInsight.explanation}`;
-    insightElement.append(result);
-  }
-
   dateInfo.replaceChildren(
     heading,
     marketingCopy,
     detailList,
-    ...(insightElement ? [insightElement] : []),
+    createHiringGauge(data, applicationInsight),
   );
   const chipColors = [
     ["#f5f3ff", "#6d28d9", "#ddd6fe"],
