@@ -725,9 +725,74 @@ Alan açıklamaları paylaşılan örnek ve alan adlarından yorumlanmıştır; 
 
 Etkileşimlerin sıralama garantisi ve birden fazla görüntülemenin nasıl temsil edildiği doğrulanmadı. Özgeçmişin görüntülenmesi, mülakat veya kabul anlamına gelmez. `coverLetter` HTML içerdiğinden arayüzde gösterilecekse güvenli metin veya temizlenmiş HTML olarak işlenmelidir. Yanıt mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Başvuru bulunmaması, yönlendirilmiş ilanlar, başarısız yanıtlar, HTTP durum kodları ve rate-limit davranışı henüz gözlenmedi.
 
+## Şirket arama — `/Search/company`
+
+**Kaynak:** Kullanıcının paylaştığı URL ve JSON yanıt dosyası. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi.
+
+**Adres:** `https://candidatesearchapigateway.kariyer.net/Search/company?Size=50&Type=Company&Keyword=test`
+
+URL yolu ve query parametrelerinin büyük/küçük harfleri paylaşılan örnekle aynıdır. HTTP yöntemi, kimlik doğrulama başlıkları, cookie gereksinimi ve istek gövdesi paylaşılmadı. Önceki endpoint'lerdeki Bearer gereksinimi bu endpoint için doğrulanmış kabul edilmez.
+
+| Query parametresi | Paylaşılan değer / açıklama |
+| --- | --- |
+| `Size` | `50`; istenen sonuç sayısı olarak yorumlandı, izin verilen sınırlar bilinmiyor |
+| `Type` | `Company`; arama türü olarak yorumlandı, diğer kabul edilen değerler bilinmiyor |
+| `Keyword` | `test`; arama metni; eşleşme ve sıralama kuralları doğrulanmadı |
+
+### Anonimleştirilmiş ve kısaltılmış yanıt örneği
+
+Paylaşılan yanıtta `data` doğrudan 50 şirket kaydından oluşan bir dizidir. Örnek tek kayda indirgenmiş; şirket kimlikleri, adı, bağlantıları ve sektör kimliği yer tutucuyla değiştirilmiştir. `profileId` paylaşılan yanıtta sayıdır; örnekte anonimleştirme amacıyla string gösterilir.
+
+```json
+{
+  "statusCode": "Success",
+  "status": "Success",
+  "data": [
+    {
+      "id": "<SEARCH_RESULT_ID>",
+      "name": "Örnek şirket",
+      "companyId": "<COMPANY_ID>",
+      "profileId": "<PROFILE_ID>",
+      "occurrence": 4,
+      "type": "Company",
+      "logo": "<LOGO_URL>",
+      "sectors": [{"id": "<SECTOR_ID>", "name": null}],
+      "companyUrl": "/firma-profil/<COMPANY_SLUG>",
+      "isFollowed": false,
+      "isAmbargoed": false
+    }
+  ],
+  "message": null,
+  "error": null
+}
+```
+
+### Yanıtta gözlenen alanlar
+
+Alan açıklamaları paylaşılan örnek ve alan adlarından yorumlanmıştır; zorunlulukları ve diğer olası değerleri doğrulanmadı. `isAmbargoed` yazımı paylaşılan yanıtla aynıdır.
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `statusCode`, `status` | String; her ikisi de `"Success"` |
+| `data` | Dizi; şirket arama sonuçları, örnekte 50 kayıt |
+| `data[].id` | String; arama sonucu kimliği, örnekte `C` önekiyle şirket kimliğini içeriyor |
+| `data[].name` | String; şirket adı |
+| `data[].companyId` | String; şirket kimliği |
+| `data[].profileId` | Sayı; şirket profil kimliği, `0` değeri de gözlendi |
+| `data[].occurrence` | Sayı; şirketin açık ilan sayısı. Kullanıcının açıklamasıyla belirlendi; canlı istekle ayrıca doğrulanmadı. |
+| `data[].type` | String; örnekte `"Company"` |
+| `data[].logo` | String; şirket logo adresi |
+| `data[].sectors` | Dizi; elemanlarda string `id`, örnekte null `name` |
+| `data[].companyUrl` | String; göreli şirket profil yolu |
+| `data[].isFollowed` | Boolean; şirketin takip edilmesiyle ilgili bayrak olarak yorumlandı |
+| `data[].isAmbargoed` | Boolean; şirket kısıtlamasıyla ilgili bayrak olarak yorumlandı |
+| `message`, `error` | Örnekte null; hata durumundaki türleri bilinmiyor |
+
+Paylaşılan yanıtta toplam sonuç sayısı veya sayfalama metadatası bulunmuyor. `Size=50` ile 50 kayıt dönmesi, toplam eşleşmenin 50 olduğunu göstermez. Yanıt mevcut `/job` ayrıştırıcısıyla uyumlu değildir. HTTP durum kodu, başarısız/boş yanıtlar ve rate-limit davranışı paylaşılmadı.
+
 ## Şirket sayıları için mevcut veri kaynakları
 
-Şu anda bu sayılar için doğrulanmış bir JSON endpoint'i kullanılmıyor:
+Uzantının çalışma kodunda bu sayılar için henüz bir JSON endpoint'i kullanılmıyor. Kullanıcının açıklamasına göre `/Search/company` yanıtındaki `data[].occurrence` şirketin açık ilan sayısını verir; bu kaynak henüz çalışma koduna entegre edilmedi.
 
 - **Takipçi:** İlan sayfasındaki “Şirket Hakkında” bölümünün DOM'undan okunur. Eksikse şirket profilindeki görünür takipçi metni kullanılır.
 - **Açık ilan:** `https://www.kariyer.net/firma-profil/{profil-slug}` HTML sayfasındaki `Tümünü Gör (N)` bağlantısından okunur. Bağlantı `/is-ilanlari?fpi={profil-kimliği}&…` listesine gider.
@@ -746,5 +811,6 @@ Profil HTML isteği aynı kaynak üzerinden yapılır. Bu bölüm sayfa entegras
 - `POST /Job/job-detail-recommendations` için gerekli başlıklar, liste türü kodları ve başarısız yanıtların doğrulanması.
 - `/candidates/get-salary-by-position` için HTTP yöntemi, `ApiKey` gereksinimleri, maaş birimi/dönemi ve başarısız veya verisiz yanıtlar.
 - `/get-job-application-detail` için HTTP yöntemi, yönlendirilmiş ilan/başvuru bulunmaması durumları ve süreç/etkileşim kodları.
+- `/Search/company` için HTTP yöntemi, kimlik doğrulama ve sonuç sınırı/sayfalama davranışı.
 
 Yeni kayıtlar gerçek istekte görülen URL ve alanlarla eklenecek; endpoint adları tahmin edilerek yazılmayacak. Paylaşılan örneklerden Cookie, Authorization, token ve kişisel veriler çıkarılmalıdır.
