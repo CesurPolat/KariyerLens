@@ -85,6 +85,8 @@ Tarayıcı senaryoları için `node tests/serve.mjs` çalıştırıp `http://127
 
 ## 🛠️ Teknoloji
 
+Kullandığımız endpoint'lerin parametreleri, yanıt alanları ve doğrulama notları: [Kariyer.net API notları](docs/kariyer-net-api.md).
+
 | Bileşen | Teknoloji |
 | --- | --- |
 | Platform | Chrome Extension · Manifest V3 |
