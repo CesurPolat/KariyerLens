@@ -47,7 +47,7 @@ export async function chatWithJob(job, messages, settings, fetcher = fetch) {
     });
     if ([401, 403].includes(response.status)) return fail("AUTH_ERROR", "API anahtarı geçersiz veya bu modele erişiminiz yok.");
     if ([402, 429].includes(response.status)) return fail("QUOTA_ERROR", "Kota, bakiye veya istek sınırına ulaşıldı. Sağlayıcı hesabınızı kontrol edin.");
-    if (!response.ok) return fail("HTTP_ERROR", `AI isteği başarısız oldu (${response.status}). Model kimliğini kontrol edin.`);
+    if (!response.ok) return fail("HTTP_ERROR", `Yapay zekâ isteği başarısız oldu (${response.status}). Model kimliğini kontrol edin.`);
     const result = await response.json();
     const reply = result?.choices?.[0]?.message?.content;
     if (typeof reply !== "string" || !reply.trim()) return fail("INVALID_RESPONSE", "Sağlayıcıdan geçerli bir metin yanıtı alınamadı.");
@@ -55,6 +55,6 @@ export async function chatWithJob(job, messages, settings, fetcher = fetch) {
   } catch (error) {
     if (error?.name === "AbortError") return fail("TIMEOUT", "Yanıt 25 saniye içinde alınamadı. Yeniden deneyebilirsiniz.");
     if (error instanceof SyntaxError) return fail("INVALID_RESPONSE", "Sağlayıcının yanıtı okunamadı.");
-    return fail("NETWORK_ERROR", "AI bağlantısı kurulamadı. İnternet bağlantınızı kontrol edin.");
+    return fail("NETWORK_ERROR", "Yapay zekâ bağlantısı kurulamadı. İnternet bağlantınızı kontrol edin.");
   } finally { clearTimeout(timer); }
 }

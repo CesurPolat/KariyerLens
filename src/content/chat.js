@@ -25,7 +25,7 @@
       <div id="suggestions"></div>
       <form><textarea maxlength="4000" aria-label="Mesajınız" placeholder="İlan hakkında bir soru sor…" required></textarea>
       <div class="footer"><span>Enter: gönder · Shift+Enter: yeni satır</span><button id="send" type="submit">Gönder</button></div></form>
-      <div id="status" role="status">Mesajların ve ilan bilgileri seçtiğin AI sağlayıcısına gönderilir. İlk kullanımda Ayarlar’ı aç.</div>
+      <div id="status" role="status">Mesajların ve ilan bilgileri seçtiğin yapay zekâ sağlayıcısına gönderilir. İlk kullanımda Ayarlar’ı aç.</div>
     </section>`;
   const list = root.querySelector("#messages");
   const input = root.querySelector("textarea");
@@ -82,7 +82,7 @@
         setStatus(response?.message || "Yanıt alınamadı. Yeniden deneyin.", true);
       } else {
         messages.push({ role: "assistant", content: response.reply });
-        setStatus("Yanıtlar AI tarafından üretilir; önemli bilgileri ilanla karşılaştır.");
+        setStatus("Yanıtlar yapay zekâ tarafından üretilir; önemli bilgileri ilanla karşılaştır.");
       }
     } catch {
       if (generation !== requestGeneration || findJobId() !== requestJobId) return;
@@ -114,7 +114,7 @@
       jobId = current; generation++; messages = []; pending = false; input.value = ""; render();
       lastRequestedJobId = "";
       loadCurrentJob();
-      setStatus("Mesajların ve ilan bilgileri seçtiğin AI sağlayıcısına gönderilir. İlk kullanımda Ayarlar’ı aç.");
+      setStatus("Mesajların ve ilan bilgileri seçtiğin yapay zekâ sağlayıcısına gönderilir. İlk kullanımda Ayarlar’ı aç.");
     }
     const column = jobId && document.querySelector(".job-detail-right-column");
     if (!column) { if (host.isConnected) host.remove(); return; }
