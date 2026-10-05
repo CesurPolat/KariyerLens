@@ -473,7 +473,7 @@ async function loadCurrentJob() {
 
   try {
     const response = await chrome.runtime.sendMessage({ type: GET_JOB, jobId });
-    if (response?.ok) {
+    if (response?.ok && findJobId() === jobId) {
       syncNativeApplicationCount(response.data.applicationCount);
       syncNativeDateInfo(response.data);
       syncNativeApplicationReviewInfo(response.data.applicationReviewText);

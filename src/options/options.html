@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="tr">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KariyerLens · Asistan ayarları</title><link rel="stylesheet" href="options.css"></head>
+<body><main>
+  <h1>✦ KariyerLens Asistan</h1><p>Mesajların ve ilan bilgileri seçtiğin sağlayıcıya doğrudan gönderilir. Kendi API anahtarını kullan; API kullanımı sağlayıcının tarifesine göre ücretlendirilebilir.</p>
+  <form id="settings">
+    <label for="provider">Sağlayıcı</label><select id="provider"><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option></select>
+    <label for="api-key">API anahtarı</label><input id="api-key" type="password" autocomplete="off" spellcheck="false" required>
+    <label for="model">Model kimliği</label><input id="model" type="text" autocomplete="off" spellcheck="false" required maxlength="200"><p id="model-hint"></p>
+    <p>Anahtar yalnız bu bilgisayarda uzantının yerel depolamasında saklanır; şifreli bir kasa değildir. Kariyer.net sayfasına veya sohbet kartına aktarılmaz. Sohbet geçmişi sayfa yenilenince silinir.</p>
+    <div class="actions"><button type="submit">Kaydet</button><button id="delete" type="button">Bu sağlayıcının anahtarını sil</button></div>
+  </form><p id="status" role="status" aria-live="polite"></p>
+</main><script type="module" src="options.js"></script></body></html>

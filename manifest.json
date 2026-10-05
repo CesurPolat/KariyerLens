@@ -4,7 +4,8 @@
   "description": "Kariyer.net ilan verisini sayfa üzerinde görüntüler.",
   "version": "0.1.0",
   "permissions": ["storage"],
-  "host_permissions": ["https://candidatesearchapigateway.kariyer.net/*"],
+  "host_permissions": ["https://candidatesearchapigateway.kariyer.net/*", "https://api.openai.com/*", "https://openrouter.ai/*"],
+  "options_ui": { "page": "src/options/options.html", "open_in_tab": true },
   "background": {
     "service_worker": "src/background/service-worker.js",
     "type": "module"
@@ -12,7 +13,7 @@
   "content_scripts": [
     {
       "matches": ["https://*.kariyer.net/*"],
-      "js": ["src/content/content-script.js"],
+      "js": ["src/content/content-script.js", "src/content/chat.js"],
       "run_at": "document_idle"
     }
   ],
