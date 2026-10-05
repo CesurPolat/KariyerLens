@@ -568,6 +568,163 @@ Aşağıdaki ilan alanları `data.resultJobList[]` altındadır. Açıklamalar a
 
 Yanıt `data.resultJobList` üzerinden ayrıştırılmalıdır; mevcut `/job` kodunun beklediği `jobGeneralInformation` nesnesi bulunmuyor. `algorithmName` ve `jobRecommendationModel` null olduğundan öneri algoritması bu örnekten belirlenemez.
 
+## Pozisyona göre maaş — `/candidates/get-salary-by-position`
+
+**Kaynak:** Kullanıcının paylaştığı URL, JSON yanıtı ve `ApiKey` başlığı gereksinimi. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi.
+
+**Adres:** `https://candidatewebapigw.kariyer.net/candidates/get-salary-by-position?positionId=<POSITION_ID>`
+
+```http
+ApiKey: <API_KEY>
+```
+
+HTTP yöntemi paylaşılmadı. İstek gövdesi, ek başlıklar, Bearer token veya cookie gereksinimi doğrulanmadı. API anahtarının değeri paylaşılmadı; edinilme yöntemi bilinmiyor.
+
+| Query parametresi | Açıklama |
+| --- | --- |
+| `positionId` | Pozisyon kimliği; paylaşılan örnekte yanıtın `body.positionCode` alanıyla eşleşiyor. API'nin kabul ettiği biçim ve sınırlar doğrulanmadı. |
+
+### Anonimleştirilmiş yanıt örneği
+
+İstek takip kimliği ve sunucu adı çıkarılmış, pozisyon kimliği ve metinleri yer tutucuyla değiştirilmiştir. Maaş ve toplam sayı değerleri paylaşılan örnekle aynıdır; güncel maaş bilgisi olarak ayrıca doğrulanmadı.
+
+```json
+{
+  "header": {
+    "globalId": "<REQUEST_ID>",
+    "isSuccess": true,
+    "message": null,
+    "responseCode": 0,
+    "hostDateTime": "0001-01-01 00:00:00 GMT+01:56",
+    "languageId": null,
+    "machineName": "<SERVER_NAME>"
+  },
+  "body": {
+    "isSuccess": true,
+    "positionCode": "<POSITION_ID>",
+    "positionName": "Örnek pozisyon",
+    "positionUrl": "pozisyonlar/<POSITION_SLUG>/maas",
+    "minimumSalary": 71000.0,
+    "maximumSalary": 130000.0,
+    "totalCount": 5173,
+    "isConfidential": false,
+    "isSalaryExist": true
+  }
+}
+```
+
+### Yanıtta gözlenen alanlar
+
+Alan açıklamaları paylaşılan örnek ve alan adlarından yorumlanmıştır; zorunlulukları ve diğer olası değerleri doğrulanmadı.
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `header.globalId` | String; istek takip kimliği olarak yorumlandı |
+| `header.isSuccess` | Boolean; üst düzey başarı bayrağı |
+| `header.message`, `header.languageId` | Örnekte null; diğer değerlerin türleri bilinmiyor |
+| `header.responseCode` | Sayı; örnekte `0`, kod sözleşmesi doğrulanmadı |
+| `header.hostDateTime` | String; örnekte `0001-01-01 00:00:00 GMT+01:56`; gerçek işlem zamanı olarak kabul edilmemeli |
+| `header.machineName` | String; yanıtı üreten sunucunun adı olarak yorumlandı |
+| `body.isSuccess` | Boolean; gövdeye ait başarı bayrağı |
+| `body.positionCode` | String; pozisyon kodu |
+| `body.positionName` | String; pozisyon adı |
+| `body.positionUrl` | String; maaş sayfasının göreli yolu, başında `/` bulunmuyor |
+| `body.minimumSalary`, `body.maximumSalary` | Sayı; minimum ve maksimum maaş değerleri olarak yorumlandı |
+| `body.totalCount` | Sayı; maaş verisine katkı sağlayan kayıt/kişi sayısı olabilir, kesin kapsamı bilinmiyor |
+| `body.isConfidential` | Boolean; gizlilik bayrağı olarak yorumlandı |
+| `body.isSalaryExist` | Boolean; maaş verisinin varlığı bayrağı |
+
+Yanıt para birimi, aylık/yıllık dönem, net/brüt ayrımı, veri tarihi veya hesaplama yöntemini belirtmiyor; bu bilgiler varsayılmamalıdır. `header.isSuccess`, `body.isSuccess` ve `body.isSalaryExist` ayrı alanlardır; başarısızlık veya veri bulunmaması durumundaki kombinasyonları henüz gözlenmedi. Yanıt `header`/`body` sarmalayıcısı kullanır ve mevcut `/job` ayrıştırıcısıyla uyumlu değildir. HTTP durum kodu, başarısız yanıtlar, API anahtarının kapsamı ve rate-limit davranışı paylaşılmadı.
+
+## Başvuru detayı — `/get-job-application-detail`
+
+**Kaynak:** Kullanıcının paylaştığı URL, JSON yanıtı ve Bearer token bilgisi. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi.
+
+**Adres:** `https://candidatewebapigw.kariyer.net/get-job-application-detail?jobId=<JOB_ID>&isRedirectedJob=false`
+
+```http
+Authorization: Bearer <TOKEN>
+```
+
+HTTP yöntemi paylaşılmadı. İstek gövdesi, ek başlıklar ve cookie gereksinimi doğrulanmadı.
+
+| Query parametresi | Açıklama |
+| --- | --- |
+| `jobId` | İlan kimliği; gerçek değer dokümana kaydedilmez. Kabul edilen biçim ve sınırlar bilinmiyor. |
+| `isRedirectedJob` | Paylaşılan URL'de `false`; yönlendirilmiş ilan olup olmadığını belirten parametre olarak yorumlandı. `true` durumundaki davranış doğrulanmadı. |
+
+### Anonimleştirilmiş yanıt örneği
+
+Sayısal kimlikler string yer tutucuyla gösterilmiştir. CV adı/kimliği, ön yazı, şirket/pozisyon bilgileri, logo adresi ve başvuru/etkileşim tarihleri değiştirilmiştir. Yanıt doğrudan `applicationDetail` ve `applicationInteractions` alanlarını içeriyor; paylaşılan örnekte başarı sarmalayıcısı bulunmuyor.
+
+```json
+{
+  "applicationDetail": {
+    "applicationId": "<APPLICATION_ID>",
+    "jobId": "<JOB_ID>",
+    "applicationDeleteCount": 0,
+    "appliedDate": "2024-01-01 12:00:00 GMT+03:00",
+    "isArchived": false,
+    "jobAppliedProcess": 1,
+    "applicationCanBeDeletedLastTime": false,
+    "isDeleted": false,
+    "cvName": "Örnek CV",
+    "cvId": "<REDACTED>",
+    "isFormEditable": false,
+    "coverLetter": "<p>Örnek ön yazı.</p>",
+    "totalFormCount": 7,
+    "messageTitle": null,
+    "messageContent": null,
+    "messageId": null,
+    "messageType": 0,
+    "jobPositionName": "Örnek pozisyon",
+    "companyName": "Örnek şirket",
+    "logoUrl": "<LOGO_URL>",
+    "companyId": "<COMPANY_ID>",
+    "positionId": "<POSITION_ID>"
+  },
+  "applicationInteractions": [
+    {
+      "interactionStatus": 3,
+      "interactionStatusText": "Başvurun 01.01.2024 tarihinde iletildi.",
+      "interactionDate": "2024-01-01 12:00:00 GMT+03:00"
+    },
+    {
+      "interactionStatus": 1,
+      "interactionStatusText": "Özgeçmişin Görüntülendi",
+      "interactionDate": "2024-01-02 15:00:00 GMT+03:00"
+    }
+  ]
+}
+```
+
+### Yanıtta gözlenen alanlar
+
+Alan açıklamaları paylaşılan örnek ve alan adlarından yorumlanmıştır; zorunlulukları ve diğer olası değerleri doğrulanmadı.
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `applicationDetail` | Nesne; başvuru bilgileri |
+| `applicationDetail.applicationId`, `.jobId`, `.companyId`, `.positionId` | Sayı; başvuru, ilan, şirket ve pozisyon kimlikleri |
+| `applicationDetail.applicationDeleteCount` | Sayı; başvuru silme sayısı olarak yorumlandı |
+| `applicationDetail.appliedDate` | String; başvuru tarihi, örnekte `YYYY-MM-DD HH:mm:ss GMT+03:00` |
+| `applicationDetail.isArchived`, `.isDeleted` | Boolean; arşivlenme ve silinme bayrakları |
+| `applicationDetail.jobAppliedProcess` | Sayı; başvuru süreç kodu, örnekte `1`; anlamı doğrulanmadı |
+| `applicationDetail.applicationCanBeDeletedLastTime` | Boolean; son silme hakkı/koşuluyla ilişkili olabilir; kesin anlamı doğrulanmadı |
+| `applicationDetail.cvName`, `.cvId` | String; başvuruyla ilişkili CV adı ve kodlanmış kimliği |
+| `applicationDetail.isFormEditable` | Boolean; başvuru formunun düzenlenebilme bayrağı |
+| `applicationDetail.coverLetter` | String; HTML içeren ön yazı |
+| `applicationDetail.totalFormCount` | Sayı; form sayısı olarak yorumlandı; neyi saydığı doğrulanmadı |
+| `applicationDetail.messageTitle`, `.messageContent`, `.messageId` | Örnekte null; dolu değerlerin türleri bilinmiyor |
+| `applicationDetail.messageType` | Sayı; mesaj türü kodu, örnekte `0`; anlamı bilinmiyor |
+| `applicationDetail.jobPositionName`, `.companyName`, `.logoUrl` | String; pozisyon adı, şirket adı ve logo adresi |
+| `applicationInteractions` | Dizi; başvuru etkileşim kayıtları |
+| `applicationInteractions[].interactionStatus` | Sayı; örnekte `3` başvurunun iletilmesi, `1` özgeçmişin görüntülenmesi metinleriyle birlikte dönüyor; diğer kodlar bilinmiyor |
+| `applicationInteractions[].interactionStatusText` | String; etkileşimin kullanıcıya yönelik açıklaması |
+| `applicationInteractions[].interactionDate` | String; etkileşim tarihi, örnekte `YYYY-MM-DD HH:mm:ss GMT+03:00` |
+
+Etkileşimlerin sıralama garantisi ve birden fazla görüntülemenin nasıl temsil edildiği doğrulanmadı. Özgeçmişin görüntülenmesi, mülakat veya kabul anlamına gelmez. `coverLetter` HTML içerdiğinden arayüzde gösterilecekse güvenli metin veya temizlenmiş HTML olarak işlenmelidir. Yanıt mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Başvuru bulunmaması, yönlendirilmiş ilanlar, başarısız yanıtlar, HTTP durum kodları ve rate-limit davranışı henüz gözlenmedi.
+
 ## Şirket sayıları için mevcut veri kaynakları
 
 Şu anda bu sayılar için doğrulanmış bir JSON endpoint'i kullanılmıyor:
@@ -587,5 +744,7 @@ Profil HTML isteği aynı kaynak üzerinden yapılır. Bu bölüm sayfa entegras
 - `/search/savedsearches` için HTTP yöntemi, `size`/`from` sayfalama davranışı ve başarısız yanıt örnekleri.
 - `/candidates/job_apply_status` için HTTP yöntemi, `jobApplyStatus`/`responseCode` kodları ve diğer başvuru durumlarının yanıtları.
 - `POST /Job/job-detail-recommendations` için gerekli başlıklar, liste türü kodları ve başarısız yanıtların doğrulanması.
+- `/candidates/get-salary-by-position` için HTTP yöntemi, `ApiKey` gereksinimleri, maaş birimi/dönemi ve başarısız veya verisiz yanıtlar.
+- `/get-job-application-detail` için HTTP yöntemi, yönlendirilmiş ilan/başvuru bulunmaması durumları ve süreç/etkileşim kodları.
 
 Yeni kayıtlar gerçek istekte görülen URL ve alanlarla eklenecek; endpoint adları tahmin edilerek yazılmayacak. Paylaşılan örneklerden Cookie, Authorization, token ve kişisel veriler çıkarılmalıdır.
