@@ -18,6 +18,7 @@ KariyerLens, **Kariyer.net ilanlarında başvuru verilerini ve alım hareketlili
 - **🎯 Alım devir saati:** Son inceleme zamanı ve başvuru hızına göre alım hareketliliğini ibreli bir göstergeyle tahmin eder. Veri yetersizse bunu belirtir.
 - **🗓️ İlan bilgileri:** Yayın ve son başvuru tarihlerini, yayınlanma süresini ve API'deki sürüm değerini bilgi bloğunda sunar.
 - **🏷️ Pozisyon etiketi:** Pozisyon adını sayfanın mevcut özellik listesine ekler.
+- **🏢 Şirket istatistikleri:** Sağdaki şirket kartında takipçi ve açık iş ilanı sayılarını gösterir. Açık ilan sayısına tıklayarak şirketin ilanlarını açabilirsiniz.
 - **💬 KariyerLens Asistan:** Yapay zekâ ile ilanın sağ sütununda ilanı özetler, aranan yetkinlikleri açıklar ve mülakata hazırlanmaya yardımcı olur.
 - **⚡ Sayfa içinde kullanım:** Ayrı bir panel açmadan çalışır; başarılı API yanıtlarını beş dakika boyunca bellekte önbelleğe alır.
 
@@ -55,6 +56,8 @@ Sohbet geçmişi yalnız açık sayfanın belleğinde tutulur; ilan değişince,
 
 ### İlan verileri
 
+Şirket kartındaki takipçi sayısı öncelikle ilanın “Şirket Hakkında” bölümünden alınır. Açık ilan sayısı şirket profilindeki “Tümünü Gör” alanından okunur. Şirket profilleri aynı kaynak üzerinden istenir, beş dakika bellekte önbelleğe alınır ve istekler 15 saniyede zaman aşımına uğrar. Eksik bilgiler `—` ile gösterilir; sıfır kabul edilmez. Profilde kısaltılmış takipçi sayısı varsa aynı biçimde korunur. Yeni erişim izni veya API anahtarı gerekmez.
+
 1. İçerik betiği, ilan URL'sinden sayısal `jobId` değerini algılar.
 2. Arka plan service worker'ı, Kariyer.net API'sinden ilan verilerini ister.
 3. API yanıtı sade bir veri modeline dönüştürülür ve başarılı yanıtlar beş dakika önbellekte tutulur.
@@ -78,6 +81,7 @@ API anahtarları `chrome.storage.local` içinde yalnız bu bilgisayarda saklanı
 
 Node.js ile taklit API ve service worker testleri: `node --test tests/*.test.mjs`.
 Tarayıcı senaryoları için `node tests/serve.mjs` çalıştırıp `http://127.0.0.1:4173/tests/browser.html` adresini açın. Testler gerçek sağlayıcıya istek göndermez ve API anahtarı gerektirmez.
+Şirket kartı senaryoları için aynı sunucuda `http://127.0.0.1:4173/tests/company-stats.html` adresini açın; profil yanıtları taklit edilir.
 
 ## 🛠️ Teknoloji
 
@@ -105,6 +109,7 @@ KariyerLens/
 │   │   └── service-worker.js    # Mesajlaşma ve önbellek
 │   ├── content/
 │   │   ├── chat.js              # Shadow DOM sohbet kartı
+│   │   ├── company-stats.js     # Şirket takipçisi ve açık ilan sayısı
 │   │   └── content-script.js    # Sayfa entegrasyonu ve göstergeler
 │   ├── options/                # Sağlayıcı, API anahtarı ve model ayarları
 │   └── shared/

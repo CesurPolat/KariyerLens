@@ -20,7 +20,7 @@
   "content_scripts": [
     {
       "matches": ["https://*.kariyer.net/*"],
-      "js": ["src/content/content-script.js", "src/content/chat.js"],
+      "js": ["src/content/content-script.js", "src/content/company-stats.js", "src/content/chat.js"],
       "run_at": "document_idle"
     }
   ],
