@@ -427,6 +427,147 @@ Alan açıklamaları paylaşılan örnek ve alan adlarından yorumlanmıştır; 
 
 Bu yanıt `header`/`body` sarmalayıcısı kullanır; mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Paylaşılan örnekte istek başarılı (`header.isSuccess: true`) olsa da adayın yeniden başvurması mümkün değil (`body.canApplyJob: false`). İstek başarısı ve başvuru uygunluğu ayrı değerlendirilmelidir. HTTP durum kodu, başarısız yanıtlar, token süresi ve rate-limit davranışı paylaşılmadı.
 
+## İlan detay önerileri — `POST /Job/job-detail-recommendations`
+
+**Kaynak:** Kullanıcının paylaştığı cURL komutu ve ardından gönderdiği JSON yanıt dosyası. `--data-raw` kullanıldığı ve yöntem ayrıca değiştirilmediği için komut POST isteği oluşturur. Canlı istek bu çalışma sırasında yapılmadı. Endpoint henüz uzantının çalışma koduna entegre edilmedi.
+
+URL'deki büyük/küçük harfler paylaşılan komutla aynıdır.
+
+```http
+POST https://candidatesearchapigateway.kariyer.net/Job/job-detail-recommendations
+Accept: application/json, text/plain, */*
+Accept-Language: tr-TR
+Authorization: Bearer <TOKEN>
+Content-Type: application/json;charset=UTF-8
+ClientType: 1
+
+{"jobId":"<JOB_ID>"}
+```
+
+| Gövde alanı | Gözlenen tür / açıklama |
+| --- | --- |
+| `jobId` | String; önerilerin istendiği ilan kimliği. Gerçek değer kaydedilmez; API'nin kabul ettiği sınırlar doğrulanmadı. |
+
+### Paylaşılan istekteki diğer başlıklar
+
+Aşağıdaki başlıklar komutta gözlendi; endpoint için hangilerinin zorunlu olduğu doğrulanmadı. Token, oturum/cihaz değerleri, hash ve koruma cookie'leri dokümana kaydedilmez.
+
+| Başlıklar | Gözlem |
+| --- | --- |
+| `SessionId`, `deviceId` | Komutta aynı değer gönderilmiş; oturum/cihaz tanımlayıcıları olarak yorumlandı |
+| `X-Hash` | Hash değeri gönderilmiş; üretim yöntemi ve gerekliliği bilinmiyor |
+| `x-px-cookies` | Koruma cookie değerleri taşınıyor; değerler çıkarıldı |
+| `Origin`, `Referer` | Sırasıyla `https://www.kariyer.net` ve `https://www.kariyer.net/` |
+| `Cache-Control`, `Pragma` | Her ikisi de `no-cache` |
+| `Connection` | `keep-alive` |
+| `Sec-Fetch-Dest`, `Sec-Fetch-Mode`, `Sec-Fetch-Site` | Sırasıyla `empty`, `cors`, `same-site` |
+| `Sec-GPC` | `1` |
+| `User-Agent`, `sec-ch-ua`, `sec-ch-ua-mobile`, `sec-ch-ua-platform` | Tarayıcı/platform bilgileri; komutta Windows ve Chromium/Brave, mobil bayrağı `?0` |
+
+Yukarıdaki HTTP örneği hassas değerleri çıkarılmış bir dokümantasyon örneğidir; tüm gerekli başlıkları içerdiği veya tek başına çalışacağı doğrulanmadı. HTTP durum kodları, başarısız yanıtlar ve rate-limit davranışı bilinmiyor.
+
+### Anonimleştirilmiş ve kısaltılmış yanıt örneği
+
+Paylaşılan yanıtta üç ilan ve `jobDetailsRecommendationListType: 1` bulunuyor. Aşağıdaki örnek tek ilana indirgenmiştir. Gerçek ilan/şirket/pozisyon kimlikleri, bağlantılar, başlıklar, konum ve tarihler yer tutucu veya örnek değerlerle değiştirilmiştir. Sayısal kimlikler anonimleştirme amacıyla string gösterilir; bazı alanlar örnekten çıkarılmıştır.
+
+```json
+{
+  "statusCode": "Success",
+  "status": "Success",
+  "data": {
+    "resultJobList": [
+      {
+        "id": "<JOB_ID>",
+        "title": "Örnek pozisyon",
+        "companyName": "Örnek şirket",
+        "jobUrl": "/is-ilani/<JOB_SLUG>",
+        "companyUrl": "/firma-profil/<COMPANY_SLUG>",
+        "logoUrl": "",
+        "fullPathLogoUrl": "<LOGO_URL>",
+        "squareLogoUrl": "<SQUARE_LOGO_URL>",
+        "locationText": "Örnek şehir",
+        "companyId": "<COMPANY_ID>",
+        "profileId": "<PROFILE_ID>",
+        "workType": "FullTime",
+        "workTypeText": "Tam Zamanlı",
+        "workModel": "OnSite",
+        "jobDateText": "7 gün",
+        "jobDateStatus": "Updated",
+        "postingDate": "2024-01-01",
+        "showTime": "2024-01-01T12:00",
+        "memberJobStatus": "Default",
+        "isFavorite": false,
+        "isEasyApply": false,
+        "isSponsored": false,
+        "isRealSponsored": false,
+        "positionId": "<POSITION_ID>",
+        "positionName": "Örnek pozisyon",
+        "sectors": [{"code": "<SECTOR_CODE>", "name": "Örnek sektör"}],
+        "locations": [{
+          "countryId": "<COUNTRY_ID>",
+          "countryName": "Örnek ülke",
+          "cityId": "<CITY_ID>",
+          "cityName": "Örnek şehir",
+          "jobTownLocationList": [{"townId": "<TOWN_ID>", "townName": "Örnek ilçe"}]
+        }],
+        "appliedDetail": null,
+        "algorithmName": null,
+        "jobRecommendationModel": null,
+        "chips": [],
+        "versionId": 2,
+        "isRedirect": true,
+        "redirectedInformation": {
+          "isRedirected": true,
+          "redirectedJobUrl": "<EXTERNAL_JOB_URL>",
+          "redirectionCount": 0,
+          "isCrawledJob": false
+        }
+      }
+    ],
+    "jobDetailsRecommendationListType": 1
+  },
+  "message": null,
+  "error": null
+}
+```
+
+### Yanıtta gözlenen alanlar
+
+Aşağıdaki ilan alanları `data.resultJobList[]` altındadır. Açıklamalar alan adları ve paylaşılan örnekten yorumlanmıştır; zorunlulukları ve diğer olası değerleri doğrulanmadı.
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| Üst düzey `statusCode`, `status` | String; her ikisi de `"Success"` |
+| Üst düzey `message`, `error` | Örnekte null; hata durumundaki türler bilinmiyor |
+| `data.resultJobList` | Dizi; önerilen ilanlar, paylaşılan yanıtta üç eleman |
+| `data.jobDetailsRecommendationListType` | Sayı; örnekte `1`, liste türü kodunun anlamı bilinmiyor |
+| `id`, `companyId`, `profileId`, `positionId` | Sayı; ilan, şirket, şirket profili ve pozisyon kimlikleri |
+| `title`, `companyName`, `positionName`, `jobCode` | String; başlık, şirket, pozisyon ve ilan kodu |
+| `jobUrl`, `companyUrl` | String; örnekte göreli Kariyer.net yolları |
+| `logoUrl`, `fullPathLogoUrl`, `squareLogoUrl` | String; logo adresleri, `logoUrl` boş olabilir |
+| `locationText`, `allLocations` | String; konum açıklamaları |
+| `workType`, `workTypeText`, `workModel` | String; çalışma türü kodu/metni ve modeli, örnekte `FullTime`, `Tam Zamanlı`, `OnSite` |
+| `jobDateText`, `jobDateStatus` | String; tarih açıklaması ve durumu, örnekte `7 gün` ve `Updated` |
+| `postingDate`, `showTime` | String; örnekte `YYYY-MM-DD` ve `YYYY-MM-DDTHH:mm`; saat dilimi belirtilmemiş |
+| `memberJobStatus`, `isFavorite` | String / boolean; adayın ilanla ilişkili durumu ve favori bayrağı |
+| `isSponsored`, `isRealSponsored`, `sponsoredScore`, `calculatedFromScore` | Boolean / boolean / sayı / boolean; sponsorluk ve skor alanları, hesaplama anlamları doğrulanmadı |
+| `humanReward`, `hasVideo`, `hasIso` | Boolean; ödül/video/ISO ile ilişkili olabilecek bayraklar, kesin anlamları doğrulanmadı |
+| `isHandicapped`, `isDisaster`, `isEasyApply` | Boolean; engelli ilanı, afet ve kolay başvuru bayrakları olarak yorumlandı |
+| `confidential`, `onlyPublishedOnKariyerNet` | Boolean; gizlilik ve yalnız Kariyer.net'te yayınlanma bayrakları olarak yorumlandı |
+| `isLogoSelected`, `positionLevel` | Sayı; logo seçimi ve pozisyon seviyesi kodları, anlamları doğrulanmadı |
+| `sectors[]` | Nesne; string `code` ve `name` alanları |
+| `locations[]` | Nesne; string ülke/şehir kimlikleri ve adları; `jobTownLocationList[]` içinde string `townId`/`townName` |
+| `appliedDetail`, `algorithmName`, `jobRecommendationModel`, `memberJobInteractionDate` | Paylaşılan yanıtta null; dolu değerlerin yapısı bilinmiyor |
+| `chips` | Dizi; örnekte boş, eleman yapısı bilinmiyor |
+| `versionId` | Sayı; sürüm değeri olarak yorumlandı, değişiklik adedi olduğu doğrulanmadı |
+| `isRedirect`, `isSimilarPosition` | Boolean; yönlendirme ve benzer pozisyon bayrakları olarak yorumlandı |
+| `redirectedInformation` | Nesne veya null; yönlendirme bilgileri |
+| `redirectedInformation.isRedirected`, `.isCrawledJob` | Boolean; yönlendirme ve taranmış ilan bayrakları |
+| `redirectedInformation.redirectedJobUrl` | String; harici ilan bağlantısı |
+| `redirectedInformation.redirectionCount` | Sayı; yönlendirme sayısı olarak yorumlandı |
+
+Yanıt `data.resultJobList` üzerinden ayrıştırılmalıdır; mevcut `/job` kodunun beklediği `jobGeneralInformation` nesnesi bulunmuyor. `algorithmName` ve `jobRecommendationModel` null olduğundan öneri algoritması bu örnekten belirlenemez.
+
 ## Şirket sayıları için mevcut veri kaynakları
 
 Şu anda bu sayılar için doğrulanmış bir JSON endpoint'i kullanılmıyor:
@@ -445,5 +586,6 @@ Profil HTML isteği aynı kaynak üzerinden yapılır. Bu bölüm sayfa entegras
 - `/jb/api/candidates/getcandidateinformationforcookie` için HTTP yöntemi, istek gereksinimleri ve durum kodlarının anlamları.
 - `/search/savedsearches` için HTTP yöntemi, `size`/`from` sayfalama davranışı ve başarısız yanıt örnekleri.
 - `/candidates/job_apply_status` için HTTP yöntemi, `jobApplyStatus`/`responseCode` kodları ve diğer başvuru durumlarının yanıtları.
+- `POST /Job/job-detail-recommendations` için gerekli başlıklar, liste türü kodları ve başarısız yanıtların doğrulanması.
 
 Yeni kayıtlar gerçek istekte görülen URL ve alanlarla eklenecek; endpoint adları tahmin edilerek yazılmayacak. Paylaşılan örneklerden Cookie, Authorization, token ve kişisel veriler çıkarılmalıdır.
