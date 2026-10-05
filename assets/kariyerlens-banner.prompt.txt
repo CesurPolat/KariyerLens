@@ -1,0 +1,13 @@
+Generation mode: built-in image_gen
+Reference: user-provided VectorMark promotional image (style and composition only).
+
+Use case: ads-marketing
+Asset type: GitHub README promotional banner for KariyerLens, landscape 1536x1024.
+Primary request: Create a polished Turkish software promotional graphic inspired by the supplied VectorMark reference. Input image 1 is style/composition reference only; replace all VectorMark branding and bookmark UI with KariyerLens job listing insights.
+Style: midnight almost-black background, subtle flowing contour lines at left and sparse purple dot grid at upper right, crisp white sans-serif typography, luminous purple #8b5cf6 accents instead of green. Generous padding and clear hierarchy.
+Top left: compact purple rounded-square brand symbol, white K with magnifying-glass motif, then large white "KariyerLens".
+Exact headline beneath: "İş ilanlarına daha yakından bak."
+Exact two-line supporting copy: "Kariyer.net ilanlarında başvuru verilerini ve" then "alım hareketliliğini tek bakışta keşfet."
+A row of three small purple line icons and exact labels: "Başvuru sayısı", "Başvuru yoğunluğu", "Alım hareketliliği".
+Lower 60 percent: a large realistic dark Chrome browser frame enclosing a clean light job listing page. URL "kariyer.net/is-ilani/ornek-1234567". Page left shows "Yazılım Geliştirici", "Örnek Teknoloji", "İstanbul · Hibrit", a purple "Başvur" button and simplified job description. On page right, clearly integrated into the page (not an extension sidebar), a white insight card with purple gradient header "KariyerLens" and subtitle "İlanın arkasındaki veriler". Three simple statistic tiles: "Toplam başvuru" with "248"; "Günlük başvuru" with "17,7"; "Son inceleme" with "Bugün". Beneath show a beautiful semicircular red amber green gauge, black needle pointing toward green, label "Alım hareketliliği", status "Yüksek". Footer of card exact: "Tahmini gösterge". Small quiet footer outside browser: "Temsili arayüz ve örnek veriler".
+Constraints: Turkish diacritics correct, sparse readable copy, polished flat UI and premium presentation, no VectorMark, no bookmark UI, no store badges, no claims of guaranteed hiring or 100% privacy. The visual is a promotional concept, not an actual screenshot. Match overall reference composition.
