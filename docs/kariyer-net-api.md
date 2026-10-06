@@ -6,7 +6,7 @@ Her yeni endpoint için yöntem, adres, parametreler, oturum gereksinimi, anonim
 
 ## İlan detayı — `GET /job`
 
-**Kaynak:** `src/background/kariyer-api.js` içindeki mevcut entegrasyon.
+**Kaynak:** `src/background/kariyer-api.ts` içindeki mevcut entegrasyon.
 
 ```http
 GET https://candidatesearchapigateway.kariyer.net/job?jobId=<JOB_ID>

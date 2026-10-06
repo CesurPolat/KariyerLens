@@ -27,20 +27,24 @@ Alım hareketliliği **tahmini bir göstergedir**; şirketin kesin işe alım ni
 
 ## 📥 Kurulum
 
-Şu an kurulum, kaynak kodu Chrome'a paketlenmemiş uzantı olarak yükleyerek yapılır.
+Kurulum için Node.js 22.12 veya üzeri gerekir. TypeScript kaynakları Vite ile derlenir ve oluşan `dist/` klasörü Chrome'a paketlenmemiş uzantı olarak yüklenir.
 
 ```bash
 git clone https://github.com/CesurPolat/KariyerLens.git
 cd KariyerLens
+npm ci
+npm run build
 ```
 
 1. Chrome'da `chrome://extensions/` adresini açın.
 2. Sağ üstteki **Geliştirici modu** seçeneğini etkinleştirin.
 3. **Paketlenmemiş öğe yükle** düğmesine tıklayın.
-4. `manifest.json` dosyasının bulunduğu **KariyerLens klasörünü** seçin.
+4. Projenin içindeki **dist klasörünü** seçin.
 5. Bir Kariyer.net ilan sayfasını açın veya yenileyin.
 
-**npm kurulumu veya derleme adımı gerekmez.** Dosyalarda değişiklik yaptıktan sonra uzantı kartındaki yenile düğmesine basın ve ilan sayfasını yenileyin.
+Kaynakları değiştirdikten sonra `npm run build` çalıştırın, uzantı kartındaki yenile düğmesine basın ve ilan sayfasını yenileyin. `npm run dev`, önce tip kontrolü ve temiz build yapar, ardından Vite build izleme modunu başlatır. Kaynak, HTML/CSS, manifest ve kullanılan ikon değişikliklerinde `dist/` çıktısı yenilenir; Chrome'da uzantıyı yine elle yenilemeniz gerekir. İzleme sırasında tip kontrolü için `npm run typecheck` kullanın.
+
+Uzantı geliştirmesinde Vite dev server yerine `vite build --watch` kullanılır; Chrome, Manifest V3 betiklerini yerel `dist/` dosyalarından yükler. `vite.config.ts` içinde ayarlar sayfası, service worker ve üç içerik betiği için ayrı build ortamları tanımlanır. Ayarlar sayfasının HTML/CSS/JS bağlantılarını Vite işler; içerik betikleri klasik script biçiminde üretilir. Manifest ve kullanılan ikonlar küçük bir Vite plugin'iyle çıktıya eklenir. İzleme sırasında bir ortamın yeniden derlenmesi diğer ortamların dosyalarını silmez.
 
 ## 🚀 Nasıl çalışır?
 
@@ -51,7 +55,7 @@ cd KariyerLens
 3. **OpenAI** veya **OpenRouter** seçin, kendi API anahtarınızı ve hesabınızın erişebildiği modelin tam kimliğini girip **Kaydet** düğmesine basın. OpenRouter kimlikleri `sağlayıcı/model` biçimindedir.
 4. İlanın sağ sütunundaki sohbetten sorunuzu gönderin. Enter gönderir; Shift+Enter yeni satır açar.
 
-Her sağlayıcının anahtarı ve modeli ayrı saklanır. Anahtarı ayarlardaki silme düğmesiyle kaldırabilirsiniz. Anahtar ve model girilmeden AI isteği gönderilmez. Sunucu, LangChain, npm kurulumu veya derleme gerekmez.
+Her sağlayıcının anahtarı ve modeli ayrı saklanır. Anahtarı ayarlardaki silme düğmesiyle kaldırabilirsiniz. Anahtar ve model girilmeden AI isteği gönderilmez. Ayrı bir sunucu gerekmez. npm, Vite ve TypeScript derleme altyapısı hazırdır; mevcut chat hâlâ sağlayıcılara doğrudan istek gönderir, LangChain agent ve tool entegrasyonu henüz eklenmemiştir.
 
 Sohbet geçmişi yalnız açık sayfanın belleğinde tutulur; ilan değişince, temizleme düğmesine basınca veya sayfa yenilenince silinir. İsteklere son 12 mesaj eklenir. Mesajlar en fazla 4.000 karakter, ilan açıklaması en fazla 20.000 karakterdir. Yanıtlar tamamlandıktan sonra düz metin gösterilir. Hatalı istekler otomatik tekrarlanmaz; sorunuz yeniden gönderebilmeniz için yazı alanına geri konur. Zaman aşımı 25 saniyedir.
 
@@ -80,8 +84,8 @@ API anahtarları `chrome.storage.local` içinde yalnız bu bilgisayarda saklanı
 
 ### Geliştirme doğrulaması
 
-Node.js ile taklit API ve service worker testleri: `node --test tests/*.test.mjs`.
-Tarayıcı senaryoları için `node tests/serve.mjs` çalıştırıp `http://127.0.0.1:4173/tests/browser.html` adresini açın. Testler gerçek sağlayıcıya istek göndermez ve API anahtarı gerektirmez.
+`npm test`, derleme ve paket yapısı kontrolleriyle birlikte taklit API ve service worker testlerini çalıştırır. `npm run typecheck`, strict TypeScript kontrolünü tek başına çalıştırır.
+Tarayıcı senaryoları için `npm run test:browser` çalıştırıp `http://127.0.0.1:4173/tests/browser.html` adresini açın. Bu komut önce uzantıyı derler; tarayıcı senaryoları `dist/` içindeki gerçek çıktıları kullanır. Testler gerçek sağlayıcıya istek göndermez ve API anahtarı gerektirmez.
 Şirket kartı senaryoları için aynı sunucuda `http://127.0.0.1:4173/tests/company-stats.html` adresini açın; profil yanıtları taklit edilir.
 
 ## 🛠️ Teknoloji
@@ -91,7 +95,8 @@ Kullandığımız endpoint'lerin parametreleri, yanıt alanları ve doğrulama n
 | Bileşen | Teknoloji |
 | --- | --- |
 | Platform | Chrome Extension · Manifest V3 |
-| Dil | JavaScript · ES Modules |
+| Dil | TypeScript · strict tip kontrolü |
+| Derleme | npm · Vite · yerel JavaScript çıktısı |
 | Arka plan | Chrome Service Worker |
 | Sayfa entegrasyonu | Content Script · DOM · SVG gösterge |
 | Veri kaynağı | Kariyer.net API · Fetch API |
@@ -102,21 +107,28 @@ Kullandığımız endpoint'lerin parametreleri, yanıt alanları ve doğrulama n
 ```text
 KariyerLens/
 ├── manifest.json
+├── package.json               # npm komutları ve bağımlılıklar
+├── tsconfig.json              # Strict TypeScript yapılandırması
+├── tsconfig.node.json         # Vite yapılandırmasının tip kontrolü
+├── vite.config.ts             # Uzantı build ortamları ve statik dosyalar
+├── dist/                      # Chrome'a yüklenecek çıktı (Git'e eklenmez)
 ├── assets/
 │   ├── kariyerlens-banner.png
 │   └── icons/
 ├── src/
 │   ├── background/
-│   │   ├── chat-api.js           # OpenAI / OpenRouter istekleri
-│   │   ├── kariyer-api.js        # API isteği ve veri normalizasyonu
-│   │   └── service-worker.js    # Mesajlaşma ve önbellek
+│   │   ├── chat-api.ts           # OpenAI / OpenRouter istekleri
+│   │   ├── kariyer-api.ts        # API isteği ve veri normalizasyonu
+│   │   └── service-worker.ts    # Mesajlaşma ve önbellek
 │   ├── content/
-│   │   ├── chat.js              # Shadow DOM sohbet kartı
-│   │   ├── company-stats.js     # Şirket takipçisi ve açık ilan sayısı
-│   │   └── content-script.js    # Sayfa entegrasyonu ve göstergeler
+│   │   ├── chat.ts              # Shadow DOM sohbet kartı
+│   │   ├── company-stats.ts     # Şirket takipçisi ve açık ilan sayısı
+│   │   ├── content-script.ts   # Sayfa entegrasyonu ve göstergeler
+│   │   └── globals.d.ts        # İçerik betiklerinin ortak gezinme fonksiyonları
 │   ├── options/                # Sağlayıcı, API anahtarı ve model ayarları
 │   └── shared/
-│       └── messages.js         # Ortak mesaj türleri
+│       ├── messages.ts         # Ortak mesaj türleri
+│       └── types.ts            # İlan, sohbet, ayarlar ve sonuç tipleri
 └── README.md
 ```
 

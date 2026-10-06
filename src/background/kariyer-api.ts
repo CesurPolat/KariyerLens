@@ -1,3 +1,7 @@
+import type { Failure, Job, JobResult } from "../shared/types.js";
+
+const record = (value: unknown): Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const API_ORIGIN = "https://candidatesearchapigateway.kariyer.net";
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -5,34 +9,36 @@ const REQUEST_TIMEOUT_MS = 15_000;
  * Only a numeric job id is accepted so extension messages cannot turn this
  * service worker into a generic cross-origin request proxy.
  */
-export function validateJobId(value) {
+export function validateJobId(value: unknown): string | null {
   const jobId = String(value ?? "").trim();
   return /^\d{1,16}$/.test(jobId) ? jobId : null;
 }
 
-function error(code, message, status) {
+function error(code: string, message: string, status?: number): Failure {
   return { ok: false, code, message, ...(status ? { status } : {}) };
 }
 
-export function normalizeJob(raw, jobId) {
-  const payload = raw?.data ?? raw?.result ?? raw;
-  const general = payload?.jobGeneralInformation;
-  const position = payload?.jobPositionInformation;
-  const criteria = payload?.jobCandidateCriteria;
-  const company = payload?.jobCompanyInformation;
-  const statistics = payload?.jobIstatistics;
-  if (!general || typeof general !== "object") {
+export function normalizeJob(raw: unknown, jobId: string): Job | null {
+  const envelope = record(raw);
+  const payload = record(envelope.data ?? envelope.result ?? raw);
+  if (!payload.jobGeneralInformation || typeof payload.jobGeneralInformation !== "object" || Array.isArray(payload.jobGeneralInformation)) {
     return null;
   }
+  const general = record(payload.jobGeneralInformation);
+  const position = record(payload.jobPositionInformation);
+  const criteria = record(payload.jobCandidateCriteria);
+  const company = record(payload.jobCompanyInformation);
+  const statistics = record(payload.jobIstatistics);
 
-  const asText = (value) => {
+  const asText = (value: unknown): string | undefined => {
     if (typeof value === "string" && value.trim()) return value.trim();
     if (typeof value === "number") return String(value);
     return undefined;
   };
-  const list = (values) => Array.isArray(values)
-    ? values.map(asText).filter(Boolean)
+  const list = (values: unknown): string[] => Array.isArray(values)
+    ? values.map(asText).filter((value): value is string => value !== undefined)
     : [];
+  const names = (values: unknown) => Array.isArray(values) ? values.map((item: unknown) => record(item).name) : [];
 
   return {
     id: asText(general.id) ?? jobId,
@@ -45,8 +51,8 @@ export function normalizeJob(raw, jobId) {
     employmentType: asText(position?.workTypeText),
     workModel: asText(position?.workModel),
     position: asText(position?.positionName),
-    sector: list(position?.sectors?.map((item) => item?.name)),
-    workAreas: list(position?.workAreas?.map((item) => item?.name)),
+    sector: list(names(position.sectors)),
+    workAreas: list(names(position.workAreas)),
     publishedAt: asText(general.publishDate),
     jobDateText: asText(general.jobDateText),
     lastModifiedAt: asText(general.lastModifyDate),
@@ -64,7 +70,7 @@ export function normalizeJob(raw, jobId) {
   };
 }
 
-export async function getJob(jobIdInput) {
+export async function getJob(jobIdInput: unknown): Promise<JobResult> {
   const jobId = validateJobId(jobIdInput);
   if (!jobId) return error("INVALID_JOB_ID", "Geçerli bir sayısal jobId girin.");
 
@@ -100,20 +106,20 @@ export async function getJob(jobIdInput) {
       return error("INVALID_RESPONSE", "Sunucu JSON yerine beklenmeyen bir yanıt döndürdü.");
     }
 
-    let raw;
+    let raw: Record<string, unknown>;
     try {
-      raw = JSON.parse(body);
+      raw = record(JSON.parse(body));
     } catch {
       return error("INVALID_RESPONSE", "Sunucudan geçerli JSON alınamadı.");
     }
     if (raw?.statusCode && raw.statusCode !== "Success") {
-      return error("API_ERROR", raw?.message || "Kariyer.net isteği başarısız oldu.");
+      return error("API_ERROR", typeof raw.message === "string" && raw.message ? raw.message : "Kariyer.net isteği başarısız oldu.");
     }
     const data = normalizeJob(raw, jobId);
     if (!data) return error("INVALID_RESPONSE", "İlan verisi beklenen yapıda değil.");
     return { ok: true, data, fetchedAt: Date.now() };
   } catch (cause) {
-    if (cause?.name === "AbortError") return error("TIMEOUT", "İstek zaman aşımına uğradı.");
+    if (cause instanceof Error && cause.name === "AbortError") return error("TIMEOUT", "İstek zaman aşımına uğradı.");
     return error("NETWORK_ERROR", "Ağ isteği tamamlanamadı.");
   } finally {
     clearTimeout(timer);

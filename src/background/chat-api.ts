@@ -1,18 +1,20 @@
-const ENDPOINTS = Object.freeze({ openai: "https://api.openai.com/v1/chat/completions", openrouter: "https://openrouter.ai/api/v1/chat/completions" });
-const fail = (code, message) => ({ ok: false, code, message });
+import type { ChatMessage, ChatResult, ChatSettings, Failure, Job, Provider } from "../shared/types.js";
 
-export function validateMessages(messages) {
+const ENDPOINTS = Object.freeze({ openai: "https://api.openai.com/v1/chat/completions", openrouter: "https://openrouter.ai/api/v1/chat/completions" });
+const fail = (code: string, message: string): Failure => ({ ok: false, code, message });
+
+export function validateMessages(messages: unknown): ChatMessage[] | null {
   if (!Array.isArray(messages) || !messages.length || messages.length > 12) return null;
   if (messages.some((item) => !item || !["user", "assistant"].includes(item.role) || typeof item.content !== "string" || !item.content.trim() || item.content.length > 4000)) return null;
   if (messages.at(-1).role !== "user") return null;
   return messages.map(({ role, content }) => ({ role, content: content.trim() }));
 }
 
-export function plainText(value) {
+export function plainText(value: unknown): string {
   return String(value || "").replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
     .replace(/<(?:br\b[^>]*|\/p|\/div|\/li)>/gi, "\n").replace(/<[^>]*>/g, "")
     .replace(/&(?:amp|lt|gt|quot|apos|nbsp);|&#(?:x[\da-f]+|\d+);/gi, (entity) => {
-      const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+      const named: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
       if (entity[1] !== "#") return named[entity.slice(1, -1).toLowerCase()] || entity;
       const hex = entity[2].toLowerCase() === "x";
       const number = parseInt(entity.slice(hex ? 3 : 2, -1), hex ? 16 : 10);
@@ -20,16 +22,17 @@ export function plainText(value) {
     }).trim();
 }
 
-export function buildContext(job) {
-  const fields = ["id", "title", "companyName", "location", "employmentType", "workModel", "position", "sector", "workAreas", "experience", "education", "languages", "publishedAt", "closingDate", "updateCount", "applicationReviewText", "applicationCount", "isActive"];
+export function buildContext(job: Partial<Job>) {
+  const fields: (keyof Job)[] = ["id", "title", "companyName", "location", "employmentType", "workModel", "position", "sector", "workAreas", "experience", "education", "languages", "publishedAt", "closingDate", "updateCount", "applicationReviewText", "applicationCount", "isActive"];
   const context = Object.fromEntries(fields.filter((key) => job[key] !== undefined).map((key) => [key, job[key]]));
   context.qualifications = plainText(job.qualifications).slice(0, 20000);
   return JSON.stringify(context);
 }
 
-export async function chatWithJob(job, messages, settings, fetcher = fetch) {
-  const provider = settings?.provider || "openai";
-  if (!Object.hasOwn(ENDPOINTS, provider)) return fail("INVALID_PROVIDER", "Geçerli bir sağlayıcı seçin.");
+export async function chatWithJob(job: Partial<Job>, messages: unknown, settings?: ChatSettings, fetcher: typeof fetch = fetch): Promise<ChatResult> {
+  const providerValue = settings?.provider || "openai";
+  if (!Object.hasOwn(ENDPOINTS, providerValue)) return fail("INVALID_PROVIDER", "Geçerli bir sağlayıcı seçin.");
+  const provider = providerValue as Provider;
   const config = settings?.providers?.[provider];
   if (!config?.apiKey?.trim()) return fail("MISSING_API_KEY", "Ayarlar sayfasından API anahtarınızı girin.");
   if (!config?.model?.trim()) return fail("MISSING_MODEL", "Ayarlar sayfasından model kimliğini girin.");
@@ -53,7 +56,7 @@ export async function chatWithJob(job, messages, settings, fetcher = fetch) {
     if (typeof reply !== "string" || !reply.trim()) return fail("INVALID_RESPONSE", "Sağlayıcıdan geçerli bir metin yanıtı alınamadı.");
     return { ok: true, reply: reply.trim() };
   } catch (error) {
-    if (error?.name === "AbortError") return fail("TIMEOUT", "Yanıt 25 saniye içinde alınamadı. Yeniden deneyebilirsiniz.");
+    if (error instanceof Error && error.name === "AbortError") return fail("TIMEOUT", "Yanıt 25 saniye içinde alınamadı. Yeniden deneyebilirsiniz.");
     if (error instanceof SyntaxError) return fail("INVALID_RESPONSE", "Sağlayıcının yanıtı okunamadı.");
     return fail("NETWORK_ERROR", "Yapay zekâ bağlantısı kurulamadı. İnternet bağlantınızı kontrol edin.");
   } finally { clearTimeout(timer); }

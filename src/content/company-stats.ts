@@ -1,20 +1,24 @@
+interface CompanyProfile { followers: string | null; openJobs: number | null; jobsUrl: string | null }
+interface CompanyState { identity: string; url: string; data: CompanyProfile | null; requestedAt: number | null; pending: boolean; failed?: boolean; controller?: AbortController }
+
 (() => {
   const CACHE_TTL_MS = 5 * 60 * 1000;
   const ROW_SELECTOR = '[data-kariyer-lens-company-stats="true"]';
-  const cache = new Map();
-  let active;
+  const cache = new Map<string, { data: CompanyProfile; fetchedAt: number }>();
+  let active: CompanyState | null = null;
   let scheduled = false;
 
   // Requests stay on the current origin and only target company profile pages.
-  function profileUrl(value) {
+  function profileUrl(value: string | null | undefined) {
     try {
+      if (!value) return null;
       const url = new URL(value, location.origin);
       if (url.origin !== location.origin || !/^\/firma-profil\/[^/]+\/?$/.test(url.pathname)) return null;
       return new URL(url.pathname.replace(/\/$/, ""), location.origin).href;
     } catch { return null; }
   }
 
-  function followerText(value) {
+  function followerText(value: string | null) {
     const match = String(value || "").trim().match(/^([\d.,]+(?:\s*[bkBmM])?)\s+takipçi$/i);
     if (!match) return null;
     const count = match[1];
@@ -24,9 +28,9 @@
       ? `${new Intl.NumberFormat("tr-TR").format(number)} takipçi` : null;
   }
 
-  function pageFollowers(url) {
+  function pageFollowers(url: string) {
     for (const details of document.querySelectorAll('[data-test="job-detail-company-card-large-detail"]')) {
-      const link = details.querySelector('a[href*="/firma-profil/"]');
+      const link = details.querySelector<HTMLElement>('a[href*="/firma-profil/"]');
       if (profileUrl(link?.getAttribute("href")) !== url) continue;
       for (const item of details.querySelectorAll('[data-test="job-detail-company-card-large-statistic-item"]')) {
         const value = followerText(item.textContent);
@@ -36,23 +40,23 @@
     return null;
   }
 
-  function parseProfile(html, url) {
+  function parseProfile(html: string, url: string): CompanyProfile {
     const page = new DOMParser().parseFromString(html, "text/html");
     page.querySelectorAll("script,style,template").forEach((node) => node.remove());
-    let followers = null;
+    let followers: string | null = null;
     for (const item of page.querySelectorAll("span,p,div")) {
       if (item.children.length) continue;
       followers = followerText(item.textContent);
       if (followers) break;
     }
     const companyId = new URL(url).pathname.match(/-(\d+)$/)?.[1];
-    let openJobs = null;
-    let jobsUrl = null;
+    let openJobs: number | null = null;
+    let jobsUrl: string | null = null;
     for (const link of page.querySelectorAll('a[href*="/is-ilanlari"]')) {
-      const match = link.textContent.trim().match(/^Tümünü Gör\s*\(([\d.]+)\)$/i);
+      const match = (link.textContent || "").trim().match(/^Tümünü Gör\s*\(([\d.]+)\)$/i);
       if (!match) continue;
       try {
-        const target = new URL(link.getAttribute("href"), url);
+        const target = new URL(link.getAttribute("href") || "", url);
         if (target.origin !== location.origin || target.pathname !== "/is-ilanlari"
           || !companyId || target.searchParams.get("fpi") !== companyId) continue;
         const count = Number(match[1].replace(/\./g, ""));
@@ -63,12 +67,12 @@
     return { followers, openJobs, jobsUrl };
   }
 
-  function setText(element, text) {
+  function setText(element: Element, text: string) {
     if (element.textContent !== text) element.textContent = text;
   }
 
-  function render(card, button, state) {
-    let row = card.querySelector(ROW_SELECTOR);
+  function render(card: HTMLElement, button: HTMLElement, state: CompanyState) {
+    let row = card.querySelector<HTMLElement>(ROW_SELECTOR);
     if (!row) {
       row = document.createElement("div");
       row.dataset.kariyerLensCompanyStats = "true";
@@ -88,8 +92,8 @@
     }
     card.querySelectorAll(ROW_SELECTOR).forEach((item) => { if (item !== row) item.remove(); });
     if (row.nextElementSibling !== button || row.parentElement !== button.parentElement) button.before(row);
-    setText(row.querySelector('[data-kariyer-lens-followers]'), pageFollowers(state.url) || state.data?.followers || "— takipçi");
-    const jobs = row.querySelector('[data-kariyer-lens-open-jobs]');
+    setText(row.querySelector<HTMLElement>('[data-kariyer-lens-followers]')!, pageFollowers(state.url) || state.data?.followers || "— takipçi");
+    const jobs = row.querySelector<HTMLAnchorElement>('[data-kariyer-lens-open-jobs]')!;
     setText(jobs, `${state.data?.openJobs == null ? "—" : new Intl.NumberFormat("tr-TR").format(state.data.openJobs)} açık iş ilanı`);
     if (state.data?.jobsUrl) {
       if (jobs.getAttribute("href") !== state.data.jobsUrl) jobs.href = state.data.jobsUrl;
@@ -101,7 +105,7 @@
     if (row.title !== title) row.title = title;
   }
 
-  async function load(state) {
+  async function load(state: CompanyState) {
     state.requestedAt = Date.now();
     state.pending = true;
     const controller = new AbortController(); state.controller = controller;
@@ -125,10 +129,10 @@
 
   function sync() {
     const jobId = findJobId();
-    const card = jobId && document.querySelector(".job-detail-right-column .job-detail-company-card");
-    const link = card && card.querySelector('a[href*="/firma-profil/"]');
+    const card = jobId ? document.querySelector<HTMLElement>(".job-detail-right-column .job-detail-company-card") : null;
+    const link = card?.querySelector<HTMLElement>('a[href*="/firma-profil/"]');
     const url = profileUrl(link?.getAttribute("href"));
-    const button = card && card.querySelector('[data-test="job-detail-company-card-follow-button"], .job-detail-company-card-follow-button');
+    const button = card && card.querySelector<HTMLElement>('[data-test="job-detail-company-card-follow-button"], .job-detail-company-card-follow-button');
     if (!card || !url || !button) {
       active?.controller?.abort(); active = null;
       document.querySelectorAll(ROW_SELECTOR).forEach((row) => row.remove());

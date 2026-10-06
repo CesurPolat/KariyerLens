@@ -1,3 +1,5 @@
+import type { ChatMessage, ChatResult } from "../shared/types.js";
+
 (() => {
   const host = document.createElement("div");
   host.dataset.kariyerLensChat = "true";
@@ -27,17 +29,17 @@
       <div class="footer"><span>Enter: gönder · Shift+Enter: yeni satır</span><button id="send" type="submit">Gönder</button></div></form>
       <div id="status" role="status">Mesajların ve ilan bilgileri seçtiğin yapay zekâ sağlayıcısına gönderilir. İlk kullanımda Ayarlar’ı aç.</div>
     </section>`;
-  const list = root.querySelector("#messages");
-  const input = root.querySelector("textarea");
-  const send = root.querySelector("#send");
-  const status = root.querySelector("#status");
-  const suggestions = root.querySelector("#suggestions");
+  const list = root.querySelector<HTMLElement>("#messages")!;
+  const input = root.querySelector<HTMLTextAreaElement>("textarea")!;
+  const send = root.querySelector<HTMLButtonElement>("#send")!;
+  const status = root.querySelector<HTMLElement>("#status")!;
+  const suggestions = root.querySelector<HTMLElement>("#suggestions")!;
   let jobId = "";
   let generation = 0;
   let pending = false;
-  let messages = [];
+  let messages: ChatMessage[] = [];
 
-  function setStatus(text, error = false) {
+  function setStatus(text: string, error = false) {
     status.textContent = text;
     status.className = error ? "error" : "";
   }
@@ -60,7 +62,7 @@
     suggestions.querySelectorAll("button").forEach((button) => { button.disabled = pending; });
     list.scrollTop = list.scrollHeight;
   }
-  async function submit(text) {
+  async function submit(text: string) {
     sync();
     text = text.trim();
     if (!text || pending || !jobId) return;
@@ -74,7 +76,7 @@
     render();
     setStatus("Yanıt hazırlanıyor…");
     try {
-      const response = await chrome.runtime.sendMessage({ type: "CHAT_JOB", jobId, messages: messages.slice(-12).map(({ role, content }) => ({ role, content: content.slice(0, 4000) })) });
+      const response: ChatResult = await chrome.runtime.sendMessage({ type: "CHAT_JOB", jobId, messages: messages.slice(-12).map(({ role, content }) => ({ role, content: content.slice(0, 4000) })) });
       if (generation !== requestGeneration || findJobId() !== requestJobId) return;
       if (!response?.ok) {
         messages.pop();
@@ -93,14 +95,14 @@
       if (generation === requestGeneration) { pending = false; render(); input.focus(); }
     }
   }
-  root.querySelector("form").addEventListener("submit", (event) => { event.preventDefault(); submit(input.value); });
+  root.querySelector<HTMLFormElement>("form")!.addEventListener("submit", (event) => { event.preventDefault(); submit(input.value); });
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); submit(input.value); }
   });
-  root.querySelector("#clear").addEventListener("click", () => {
+  root.querySelector<HTMLButtonElement>("#clear")!.addEventListener("click", () => {
     generation++; messages = []; pending = false; input.value = ""; render(); setStatus("Sohbet temizlendi.");
   });
-  root.querySelector("#settings").addEventListener("click", async () => {
+  root.querySelector<HTMLButtonElement>("#settings")!.addEventListener("click", async () => {
     try { await chrome.runtime.sendMessage({ type: "OPEN_OPTIONS" }); }
     catch { setStatus("Ayarlar açılamadı. Uzantı simgesinden ayarları açabilirsiniz.", true); }
   });

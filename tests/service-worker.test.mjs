@@ -21,7 +21,7 @@ globalThis.fetch = async (url, options) => {
   }
   return Response.json({ choices: [{ message: { content: "SQL gerekir." } }] });
 };
-await import("../src/background/service-worker.js");
+await import("../dist/src/background/service-worker.js");
 const sender = { id: "extension-test", tab: { id: 1 }, url: "https://www.kariyer.net/is-ilani/test-123" };
 const dispatch = (message) => new Promise((resolve) => assert.equal(listener(message, sender, resolve), true));
 test("worker keeps existing GET_JOB cache and uses it for chat", async () => {
@@ -54,7 +54,7 @@ test("storage failure is closed and never calls provider", async () => {
   requests.length = 0; listener = undefined;
   chrome.storage.local.setAccessLevel = () => Promise.reject(new Error("denied"));
   chrome.storage.local.get = () => assert.fail("secrets must not be read");
-  await import("../src/background/service-worker.js?storage-failure");
+  await import("../dist/src/background/service-worker.js?storage-failure");
   assert.equal((await dispatch({ type: "CHAT_JOB", jobId: "123", messages: [{ role: "user", content: "Özet" }] })).code, "INTERNAL_ERROR");
   assert.equal(requests.length, 0);
 });
@@ -62,6 +62,6 @@ test("manifest contains only expected API hosts and correct script order", async
   const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
   assert.deepEqual(manifest.host_permissions, ["https://candidatesearchapigateway.kariyer.net/*", "https://api.openai.com/*", "https://openrouter.ai/*"]);
   assert.deepEqual(manifest.content_scripts[0].js, ["src/content/content-script.js", "src/content/company-stats.js", "src/content/chat.js"]);
-  const source = await readFile(new URL("../src/content/chat.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../src/content/chat.ts", import.meta.url), "utf8");
   assert.doesNotMatch(source, /chrome\.storage|apiKey|Authorization/);
 });

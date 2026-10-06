@@ -1,14 +1,15 @@
 import { getJob, validateJobId } from "./kariyer-api.js";
 import { chatWithJob, validateMessages } from "./chat-api.js";
 import { MESSAGE_TYPES } from "../shared/messages.js";
+import type { ChatSettings, ExtensionMessage, JobResult, JobSuccess } from "../shared/types.js";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
-const cache = new Map();
+const cache = new Map<string, JobSuccess>();
 
 const storageReady = chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
 storageReady.catch(() => {});
 
-async function loadJob(jobId) {
+async function loadJob(jobId: string): Promise<JobResult> {
   const cached = cache.get(jobId);
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
     return { ...cached, cached: true };
@@ -19,7 +20,7 @@ async function loadJob(jobId) {
   return result;
 }
 
-async function handleMessage(message) {
+async function handleMessage(message: ExtensionMessage) {
   if (message.type === MESSAGE_TYPES.OPEN_OPTIONS) {
     await chrome.runtime.openOptionsPage();
     return { ok: true };
@@ -29,9 +30,10 @@ async function handleMessage(message) {
   if (message.type === MESSAGE_TYPES.GET_JOB) return loadJob(jobId);
   if (!validateMessages(message.messages)) return { ok: false, code: "INVALID_MESSAGES", message: "Mesajlar geçersiz veya çok uzun." };
   await storageReady;
-  const { chatSettings } = await chrome.storage.local.get("chatSettings");
+  const { chatSettings } = await chrome.storage.local.get<{ chatSettings?: ChatSettings }>("chatSettings");
   const provider = chatSettings?.provider || "openai";
-  if (!["openai", "openrouter"].includes(provider) || !chatSettings?.providers?.[provider]?.apiKey?.trim() || !chatSettings?.providers?.[provider]?.model?.trim()) return chatWithJob({}, message.messages, chatSettings);
+  if (provider !== "openai" && provider !== "openrouter") return chatWithJob({}, message.messages, chatSettings);
+  if (!chatSettings?.providers?.[provider]?.apiKey?.trim() || !chatSettings?.providers?.[provider]?.model?.trim()) return chatWithJob({}, message.messages, chatSettings);
   const job = await loadJob(jobId);
   if (!job.ok) return job;
   return chatWithJob(job.data, message.messages, chatSettings);

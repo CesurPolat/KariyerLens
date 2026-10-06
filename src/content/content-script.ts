@@ -1,3 +1,7 @@
+import type { Job, JobResult } from "../shared/types.js";
+
+interface ApplicationInsight { applicationsPerDay: number; openDays: number }
+
 const GET_JOB = "GET_JOB";
 const APPLICATION_COUNT_SELECTOR = '[data-test="job-application-count"]';
 const APPLICATION_REVIEW_SELECTOR = '[data-test="job-application-view-day"]';
@@ -7,7 +11,7 @@ const JOB_DETAIL_MAIN_SELECTOR = ".job-detail-body-main";
 const NATIVE_SYNC_TIMEOUT_MS = 8_000;
 
 let lastRequestedJobId = "";
-let nativeCountObserver;
+let nativeCountObserver: MutationObserver | undefined;
 
 function findJobId() {
   const url = new URL(location.href);
@@ -20,14 +24,14 @@ function findJobId() {
   return candidates.find((value) => /^\d{1,16}$/.test(value || "")) || "";
 }
 
-function updateNativeApplicationCount(applicationCount) {
+function updateNativeApplicationCount(applicationCount?: string) {
   if (!applicationCount) return false;
-  const countElement = document.querySelector(APPLICATION_COUNT_SELECTOR);
+  const countElement = document.querySelector<HTMLElement>(APPLICATION_COUNT_SELECTOR);
   if (!countElement) return false;
 
   // Keep the nested "başvuru" label; replace only its numeric sibling.
   const textNode = [...countElement.childNodes].find(
-    (node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim(),
+    (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
   );
   if (textNode) {
     textNode.textContent = ` ${applicationCount} `;
@@ -38,19 +42,19 @@ function updateNativeApplicationCount(applicationCount) {
   return true;
 }
 
-function syncNativeApplicationCount(applicationCount) {
+function syncNativeApplicationCount(applicationCount?: string) {
   nativeCountObserver?.disconnect();
   if (updateNativeApplicationCount(applicationCount)) return;
 
   // The target node can be rendered after the API response in this SPA.
   nativeCountObserver = new MutationObserver(() => {
-    if (updateNativeApplicationCount(applicationCount)) nativeCountObserver.disconnect();
+    if (updateNativeApplicationCount(applicationCount)) nativeCountObserver?.disconnect();
   });
   nativeCountObserver.observe(document.documentElement, { childList: true, subtree: true });
   setTimeout(() => nativeCountObserver?.disconnect(), NATIVE_SYNC_TIMEOUT_MS);
 }
 
-function formatPublishedAt(value) {
+function formatPublishedAt(value?: string) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -59,10 +63,10 @@ function formatPublishedAt(value) {
   }).format(date);
 }
 
-function shortDate(value) {
+function shortDate(value?: string) {
   const match = value?.match(/^(\d{1,2})\s+(\S+)/);
   if (!match) return value || "—";
-  const months = {
+  const months: Record<string, string> = {
     Ocak: "Oca", Şubat: "Şub", Mart: "Mar", Nisan: "Nis",
     Mayıs: "May", Haziran: "Haz", Temmuz: "Tem", Ağustos: "Ağu",
     Eylül: "Eyl", Ekim: "Eki", Kasım: "Kas", Aralık: "Ara",
@@ -70,16 +74,16 @@ function shortDate(value) {
   return `${match[1]} ${months[match[2]] || match[2].slice(0, 3)}`;
 }
 
-function parseApplicationCount(value) {
+function parseApplicationCount(value: unknown) {
   const digits = String(value ?? "").replace(/[^0-9]/g, "");
   return digits ? Number(digits) : null;
 }
 
-function formatNumber(value) {
+function formatNumber(value: number) {
   return new Intl.NumberFormat("tr-TR").format(value);
 }
 
-function getApplicationInsight(data) {
+function getApplicationInsight(data: Job): ApplicationInsight | null {
   const applicationCount = parseApplicationCount(data.applicationCount);
   const publishedAt = data.publishedAt ? new Date(data.publishedAt) : null;
   if (applicationCount === null || !publishedAt || Number.isNaN(publishedAt.getTime())) {
@@ -97,7 +101,7 @@ function getApplicationInsight(data) {
   };
 }
 
-function getPublishedScore(openDays) {
+function getPublishedScore(openDays: number) {
   return openDays <= 1 ? 70
     : openDays <= 3 ? 60
       : openDays <= 7 ? 55
@@ -107,18 +111,18 @@ function getPublishedScore(openDays) {
               : 5;
 }
 
-function getHiringActivity(data, insight) {
+function getHiringActivity(data: Job, insight: ApplicationInsight | null) {
   const review = String(data.applicationReviewText || "").toLocaleLowerCase("tr-TR");
-  const applicationCount = parseApplicationCount(data.applicationCount);
-  let reviewDays = null;
+  const applicationCount = parseApplicationCount(data.applicationCount) ?? 0;
+  let reviewDays: number | null = null;
   if (/bugün|az önce|saat|dakika/.test(review)) reviewDays = 0;
   else if (/dün/.test(review)) reviewDays = 1;
   else {
     const duration = review.match(/(\d+)\s*(gün|hafta|ay)/);
-    if (duration) reviewDays = Number(duration[1]) * ({ gün: 1, hafta: 7, ay: 30 }[duration[2]]);
+    if (duration) reviewDays = Number(duration[1]) * ({ gün: 1, hafta: 7, ay: 30 }[duration[2] as "gün" | "hafta" | "ay"]);
   }
   if (/henüz|incelenmedi|incelemedi/.test(review)) reviewDays = Infinity;
-  if (reviewDays === null) {
+  if (reviewDays === null || !insight) {
     return { score: null, label: "Devir bilgisi yetersiz", copy: "Şirketin son başvuru inceleme zamanı bilinmiyor.", color: "#94a3b8" };
   }
   // PublishedAt is the primary signal. Review recency only supports the estimate;
@@ -133,7 +137,7 @@ function getHiringActivity(data, insight) {
     : applicationCount >= 750
       ? "Başvuru sayısı yüksek; rekabet artmış olabilir."
       : "";
-  const withCompetitionWarning = (copy) => competitionWarning ? `${copy} ${competitionWarning}` : copy;
+  const withCompetitionWarning = (copy: string) => competitionWarning ? `${copy} ${competitionWarning}` : copy;
   const likelyPoolListing = insight.openDays > 60 && applicationCount >= 1500;
   const poolRiskPenalty = likelyPoolListing ? 10 : 0;
   const score = Math.max(0, Math.min(100, Math.round(publishedScore + reviewScore - poolRiskPenalty - competitionPenalty)));
@@ -154,7 +158,7 @@ function getHiringActivity(data, insight) {
         : { score, label: "Yüksek devir", color: "#10b981", copy: withCompetitionWarning("Başvurular yakın zamanda incelenmiş. Alım süreci hareketli görünüyor.") };
 }
 
-function createHiringGauge(data, insight) {
+function createHiringGauge(data: Job, insight: ApplicationInsight | null) {
   const activity = getHiringActivity(data, insight);
   const panel = document.createElement("div");
   Object.assign(panel.style, { margin: "0 18px 14px", padding: "12px 14px", border: "1px solid #e2e8f0", borderRadius: "8px", background: "#ffffff", color: "#0f172a", textAlign: "left" });
@@ -167,17 +171,17 @@ function createHiringGauge(data, insight) {
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", `${activity.label}${activity.score === null ? "" : `: ${activity.score}/100`}`);
   Object.assign(svg.style, { width: "100%", maxWidth: "220px", display: "block", margin: "6px auto 0" });
-  const add = (name, attrs) => {
+  const add = (name: string, attrs: Record<string, string | number>) => {
     const element = document.createElementNS(ns, name);
     for (const [key, value] of Object.entries(attrs)) element.setAttribute(key, String(value));
     svg.append(element);
     return element;
   };
-  const point = (value, radius) => {
+  const point = (value: number, radius: number) => {
     const angle = Math.PI * (1 - value / 100);
     return [140 + radius * Math.cos(angle), 130 - radius * Math.sin(angle)];
   };
-  for (const [start, end, color] of [[0, 35, "#dc2626"], [35, 65, "#f59e0b"], [65, 100, "#10b981"]]) {
+  for (const [start, end, color] of ([[0, 35, "#dc2626"], [35, 65, "#f59e0b"], [65, 100, "#10b981"]] as const)) {
     const a = point(start, 106), b = point(end, 106);
     add("path", { d: `M ${a.join(" ")} A 106 106 0 0 1 ${b.join(" ")}`, fill: "none", stroke: color, "stroke-width": 14, "stroke-linecap": "butt", opacity: activity.score === null ? 0.25 : 0.85 });
   }
@@ -190,7 +194,7 @@ function createHiringGauge(data, insight) {
     add("line", { x1: 140, y1: 130, x2: tip[0], y2: tip[1], stroke: "#0f172a", "stroke-width": 4, "stroke-linecap": "round" });
   }
   add("circle", { cx: 140, cy: 130, r: 8, fill: activity.color, stroke: "#0f172a", "stroke-width": 3 });
-  for (const [x, label] of [[35, "DÜŞÜK"], [245, "YÜKSEK"]]) {
+  for (const [x, label] of ([[35, "DÜŞÜK"], [245, "YÜKSEK"]] as const)) {
     add("text", { x, y: 157, fill: "#94a3b8", "text-anchor": "middle", "font-size": 10 }).textContent = label;
   }
   const visual = document.createElement("div");
@@ -222,28 +226,13 @@ function createHiringGauge(data, insight) {
   return panel;
 }
 
-function legacyUpdateNativeDateInfo(data) {
-  const dateElement = document.querySelector(UPDATED_DATE_SELECTOR);
-  if (!dateElement) return false;
-
-  const jobDateText = data.jobDateText || "";
-  const details = [
-    `Yay: ${formatPublishedAt(data.publishedAt)}`,
-    `Bit: ${shortDate(data.closingDate)}`,
-    ...(jobDateText ? [jobDateText] : []),
-    `v${data.updateCount || "—"}`,
-  ].join(" · ");
-  dateElement.textContent = details;
-  dateElement.dataset.kariyerLensUpdated = "true";
-  return true;
-}
-
-function updateNativeDateInfo(data) {
-  const jobFeatures = document.querySelector(`${JOB_DETAIL_MAIN_SELECTOR} .job-features`);
+function updateNativeDateInfo(data: Job) {
+  const jobFeatures = document.querySelector<HTMLElement>(`${JOB_DETAIL_MAIN_SELECTOR} .job-features`);
   if (!jobFeatures) return false;
 
   const mainContainer = jobFeatures.closest(JOB_DETAIL_MAIN_SELECTOR);
-  let dateInfo = mainContainer.querySelector(JOB_DATE_INFO_SELECTOR);
+  if (!mainContainer) return false;
+  let dateInfo = mainContainer.querySelector<HTMLElement>(JOB_DATE_INFO_SELECTOR);
   if (dateInfo && dateInfo.previousElementSibling !== jobFeatures) {
     dateInfo.remove();
     dateInfo = null;
@@ -378,7 +367,7 @@ function updateNativeDateInfo(data) {
   return true;
 }
 
-function syncNativeDateInfo(data) {
+function syncNativeDateInfo(data: Job) {
   if (updateNativeDateInfo(data)) return;
   const observer = new MutationObserver(() => {
     if (updateNativeDateInfo(data)) observer.disconnect();
@@ -387,9 +376,9 @@ function syncNativeDateInfo(data) {
   setTimeout(() => observer.disconnect(), NATIVE_SYNC_TIMEOUT_MS);
 }
 
-function updateNativeApplicationReviewInfo(applicationReviewText) {
+function updateNativeApplicationReviewInfo(applicationReviewText?: string) {
   if (!applicationReviewText) return false;
-  const mainContainer = document.querySelector(
+  const mainContainer = document.querySelector<HTMLElement>(
     `${JOB_DETAIL_MAIN_SELECTOR} .job-detail-ad-headline .main-container`,
   );
   if (!mainContainer) return false;
@@ -400,7 +389,7 @@ function updateNativeApplicationReviewInfo(applicationReviewText) {
       if (!mainContainer.contains(element)) element.remove();
     });
 
-  let reviewElement = mainContainer.querySelector(APPLICATION_REVIEW_SELECTOR);
+  let reviewElement = mainContainer.querySelector<HTMLElement>(APPLICATION_REVIEW_SELECTOR);
   if (!reviewElement) {
     reviewElement = document.createElement("div");
     reviewElement.className = "job-application-view-day";
@@ -412,7 +401,7 @@ function updateNativeApplicationReviewInfo(applicationReviewText) {
       lineHeight: "20px",
       marginBottom: "16px",
     });
-    const jobFeatures = mainContainer.querySelector(".job-features");
+    const jobFeatures = mainContainer.querySelector<HTMLElement>(".job-features");
     if (jobFeatures) {
       jobFeatures.insertAdjacentElement("afterend", reviewElement);
     } else {
@@ -424,7 +413,7 @@ function updateNativeApplicationReviewInfo(applicationReviewText) {
   return true;
 }
 
-function syncNativeApplicationReviewInfo(applicationReviewText) {
+function syncNativeApplicationReviewInfo(applicationReviewText?: string) {
   if (updateNativeApplicationReviewInfo(applicationReviewText)) return;
   const observer = new MutationObserver(() => {
     if (updateNativeApplicationReviewInfo(applicationReviewText)) observer.disconnect();
@@ -433,19 +422,19 @@ function syncNativeApplicationReviewInfo(applicationReviewText) {
   setTimeout(() => observer.disconnect(), NATIVE_SYNC_TIMEOUT_MS);
 }
 
-function updateNativePositionFeature(position) {
+function updateNativePositionFeature(position?: string) {
   if (!position) return false;
   document
     .querySelectorAll('[data-kariyer-lens-feature="position"]')
     .forEach((element) => {
       if (!element.closest(JOB_DETAIL_MAIN_SELECTOR)) element.remove();
     });
-  const featureList = document.querySelector(
+  const featureList = document.querySelector<HTMLElement>(
     `${JOB_DETAIL_MAIN_SELECTOR} ${JOB_FEATURE_LIST_SELECTOR}`,
   );
   if (!featureList) return false;
 
-  let positionElement = featureList.querySelector('[data-kariyer-lens-feature="position"]');
+  let positionElement = featureList.querySelector<HTMLElement>('[data-kariyer-lens-feature="position"]');
   if (!positionElement) {
     positionElement = document.createElement("span");
     positionElement.className = "job-feature-item";
@@ -457,7 +446,7 @@ function updateNativePositionFeature(position) {
   return true;
 }
 
-function syncNativePositionFeature(position) {
+function syncNativePositionFeature(position?: string) {
   if (updateNativePositionFeature(position)) return;
   const observer = new MutationObserver(() => {
     if (updateNativePositionFeature(position)) observer.disconnect();
@@ -472,7 +461,7 @@ async function loadCurrentJob() {
   lastRequestedJobId = jobId;
 
   try {
-    const response = await chrome.runtime.sendMessage({ type: GET_JOB, jobId });
+    const response: JobResult = await chrome.runtime.sendMessage({ type: GET_JOB, jobId });
     if (response?.ok && findJobId() === jobId) {
       syncNativeApplicationCount(response.data.applicationCount);
       syncNativeDateInfo(response.data);
@@ -489,9 +478,9 @@ function watchClientSideNavigation() {
     lastRequestedJobId = "";
     queueMicrotask(loadCurrentJob);
   };
-  for (const method of ["pushState", "replaceState"]) {
+  for (const method of ["pushState", "replaceState"] as const) {
     const original = history[method];
-    history[method] = function (...args) {
+    history[method] = function (this: History, ...args: Parameters<History["pushState"]>) {
       const result = original.apply(this, args);
       requestAfterNavigation();
       return result;
