@@ -1,4 +1,4 @@
-export type Provider = "openai" | "openrouter";
+export type Provider = "openai" | "openrouter" | "cesurpolat";
 
 export interface ProviderSettings {
   apiKey?: string;

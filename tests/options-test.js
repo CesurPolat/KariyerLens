@@ -2,6 +2,7 @@
 const pause = () => new Promise(resolve => setTimeout(resolve, 50));
 const results = document.querySelector("#results");
 const failureMode = new URL(location.href).searchParams.has("storage-failure");
+const savedProxy = new URL(location.href).searchParams.has("saved-proxy");
 let trusted = false, writes = [], denyWrite = false;
 window.chrome = { storage: { local: {
   async setAccessLevel(value) {
@@ -10,7 +11,7 @@ window.chrome = { storage: { local: {
   },
   async get() {
     if (!trusted) throw new Error("Storage must be trusted first");
-    return { chatSettings: { provider: "openai", providers: { openai: { apiKey: "test-openai-key", model: "test-model" }, openrouter: { apiKey: "test-router-key", model: "test/router" } } } };
+    return { chatSettings: { provider: savedProxy ? "cesurpolat" : "openai", providers: { openai: { apiKey: "test-openai-key", model: "test-model" }, openrouter: { apiKey: "test-router-key", model: "test/router" } } } };
   },
   async set(value) { if (denyWrite) throw new Error("denied"); writes.push(structuredClone(value)); },
 } } };
@@ -28,14 +29,19 @@ async function run() {
     const style = document.createElement("link"); style.rel = "stylesheet"; style.href = new URL(link.getAttribute("href"), pageUrl); document.head.append(style);
   }
   await import(new URL(html.querySelector('script[type="module"]').getAttribute("src"), pageUrl).href);
-  for (let attempt = 0; attempt < 40 && !document.querySelector("#api-key"); attempt++) await pause();
+  for (let attempt = 0; attempt < 40 && !document.querySelector("#provider"); attempt++) await pause();
   await pause();
-  const key = document.querySelector("#api-key"), model = document.querySelector("#model");
   if (failureMode) {
+    const key = document.querySelector("#api-key");
     check(key.disabled && document.querySelector("#status").textContent.includes("yüklenemedi"), "Depolama erişimi reddedilince form kapalı kalır");
     check(!writes.length, "Depolama hatasında ayarlar yazılmaz");
     results.textContent += "\nTüm ayarlar hata testleri geçti."; return;
   }
+  if (savedProxy) {
+    check(document.querySelector("#provider").value === "cesurpolat" && !!document.querySelector("#proxy-hint"), "Depolamadaki proxy seçimi açılışta geri yüklenir");
+    select("openai"); await pause();
+  }
+  let key = document.querySelector("#api-key"), model = document.querySelector("#model");
   check(trusted && !key.disabled && key.value === "test-openai-key", "Yalnız güvenilir depolama erişiminden sonra ayarlar yüklenir");
   changeInput(key, "draft-openai-key"); await pause();
   select("openrouter"); await pause();
@@ -49,6 +55,14 @@ async function run() {
   denyWrite = false; document.querySelector("#delete").click(); await pause();
   check(!key.value && !writes.at(-1).chatSettings.providers.openai.apiKey && writes.at(-1).chatSettings.providers.openrouter.apiKey === "test-router-key", "Sil yalnız seçili sağlayıcının anahtarını kaldırır");
   check(!document.body.textContent.includes("test-router-key") && key.type === "password", "Anahtarlar görünür metne yazılmaz");
+  select("cesurpolat"); await pause();
+  check(!document.querySelector("#api-key,#model,#model-hint,#delete") && document.querySelector("#proxy-hint"), "Free seçilince anahtar, model ve silme alanları kaldırılır");
+  submit(); await pause();
+  check(writes.at(-1).chatSettings.provider === "cesurpolat" && Object.keys(writes.at(-1).chatSettings.providers.cesurpolat).length === 0, "Free boş anahtar ve model ile kaydedilir");
+  select("openrouter"); await pause(); key = document.querySelector("#api-key"); model = document.querySelector("#model");
+  check(key.value === "test-router-key" && model.value === "test/router" && document.querySelector("#delete"), "Diğer sağlayıcıya dönünce alanlar ve kayıtlı ayarlar geri gelir");
+  select("cesurpolat"); await pause();
+  check(!document.querySelector("#api-key,#model") && writes.at(-1).chatSettings.providers.openrouter.apiKey === "test-router-key", "Free seçimi diğer sağlayıcıların anahtarını korur");
   results.textContent += "\nTüm ayarlar testleri geçti.";
 }
 run().catch(error => { results.textContent += "\nBAŞARISIZ: " + error.message; });

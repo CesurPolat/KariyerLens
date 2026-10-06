@@ -20,7 +20,7 @@ function sse() {
   };
 }
 
-for (const provider of ["openai", "openrouter"]) {
+for (const provider of ["openai", "openrouter", "cesurpolat"]) {
   test(`${provider}: disabled streaming requests JSON while retaining progress`, async () => {
     const events = [];
     const result = await chatWithJob(job, history, settings(provider), async (_, options) => {
@@ -37,9 +37,9 @@ for (const provider of ["openai", "openrouter"]) {
     const ready = new Promise((resolve) => { first = resolve; });
     const pending = chatWithJob(job, history, settings(provider), async (url, options) => {
       assert.equal(JSON.parse(options.body).stream, true);
-      assert.equal(new Headers(options.headers).get("authorization"), "Bearer test-key");
+      assert.equal(new Headers(options.headers).get("authorization"), provider === "cesurpolat" ? null : "Bearer test-key");
       assert.equal(options.credentials, "omit");
-      assert.equal(String(url), provider === "openai" ? "https://api.openai.com/v1/chat/completions" : "https://openrouter.ai/api/v1/chat/completions");
+      assert.equal(String(url), provider === "openai" ? "https://api.openai.com/v1/chat/completions" : provider === "openrouter" ? "https://openrouter.ai/api/v1/chat/completions" : "https://llm.cesurpolat.dev/v1/chat/completions");
       source.write(chunk({ role: "assistant", reasoning_content: "private reasoning" }));
       source.write(chunk({ content: "## SQL" }));
       return source.response;

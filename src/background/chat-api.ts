@@ -7,7 +7,11 @@ import { z } from "zod";
 // false: yanıt tek seferde gelir; bekleme ve tool durumları gösterilmeye devam eder.
 export const CHAT_STREAMING_ENABLED = true;
 
-const ENDPOINTS = Object.freeze({ openai: "https://api.openai.com/v1/chat/completions", openrouter: "https://openrouter.ai/api/v1/chat/completions" });
+const ENDPOINTS = Object.freeze({
+  openai: "https://api.openai.com/v1/chat/completions",
+  openrouter: "https://openrouter.ai/api/v1/chat/completions",
+  cesurpolat: "https://llm.cesurpolat.dev/v1/chat/completions",
+});
 const fail = (code: string, message: string): Failure => ({ ok: false, code, message });
 
 export function validateMessages(messages: unknown): ChatMessage[] | null {
@@ -57,9 +61,10 @@ export async function chatWithJob(job: Partial<Job>, messages: unknown, settings
   const providerValue = settings?.provider || "openai";
   if (!Object.hasOwn(ENDPOINTS, providerValue)) return fail("INVALID_PROVIDER", "Geçerli bir sağlayıcı seçin.");
   const provider = providerValue as Provider;
+  const isFree = provider === "cesurpolat";
   const config = settings?.providers?.[provider];
-  if (!config?.apiKey?.trim()) return fail("MISSING_API_KEY", "Ayarlar sayfasından API anahtarınızı girin.");
-  if (!config?.model?.trim()) return fail("MISSING_MODEL", "Ayarlar sayfasından model kimliğini girin.");
+  if (!isFree && !config?.apiKey?.trim()) return fail("MISSING_API_KEY", "Ayarlar sayfasından API anahtarınızı girin.");
+  if (!isFree && !config?.model?.trim()) return fail("MISSING_MODEL", "Ayarlar sayfasından model kimliğini girin.");
   const history = validateMessages(messages);
   if (!history) return fail("INVALID_MESSAGES", "Mesajlar geçersiz; mesaj başına en fazla 4.000 karakter kullanın.");
   const useStreaming = Boolean(streaming) && (streaming?.enabled ?? CHAT_STREAMING_ENABLED);
@@ -110,9 +115,21 @@ export async function chatWithJob(job: Partial<Job>, messages: unknown, settings
         { name: "get_current_company_stats", description: "Açık ilanın şirketinin takipçi ve açık ilan sayısını, profil ve ilan listesi adreslerini getirir. Eksik bilgiler null olabilir.", schema: z.object({}).strict() }),
     ];
     const model = new ChatOpenAI({
-      apiKey: config.apiKey!.trim(), model: config.model!.trim(), streaming: useStreaming, maxRetries: 0, useResponsesApi: false,
+      // SDK placeholders are removed from Free requests; the service chooses its model.
+      apiKey: isFree ? "kariyerlens-free" : config!.apiKey!.trim(), model: isFree ? "kariyerlens-free" : config!.model!.trim(), streaming: useStreaming, maxRetries: 0, useResponsesApi: false,
       configuration: { baseURL: ENDPOINTS[provider].replace("/chat/completions", ""), dangerouslyAllowBrowser: true,
-        fetch: (input, init) => fetcher(input, { ...init, credentials: "omit", signal: controller.signal }) },
+        fetch: (input, init) => {
+          if (!isFree) return fetcher(input, { ...init, credentials: "omit", signal: controller.signal });
+          const headers = new Headers(init?.headers);
+          headers.delete("authorization");
+          let body = init?.body;
+          if (typeof body === "string") {
+            const payload = JSON.parse(body);
+            delete payload.model;
+            body = JSON.stringify(payload);
+          }
+          return fetcher(input, { ...init, headers, body, credentials: "omit", signal: controller.signal });
+        } },
     });
     const agent = createAgent({ model, tools,
       middleware: [createMiddleware({ name: "RequestLimits", beforeModel: () => {

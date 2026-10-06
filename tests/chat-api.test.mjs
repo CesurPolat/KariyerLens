@@ -5,17 +5,17 @@ const history = [{ role: "user", content: "İlanı özetle" }];
 const settings = (provider = "openai") => ({ provider, providers: { [provider]: { apiKey: "test-key", model: "test-model" } } });
 const job = { id: "123", title: "ERP Uzmanı", companyName: "Örnek", qualifications: "<p>SQL &amp; ERP</p><script>evil()</script>", education: ["Üniversite"], applicationCount: "200", secret: "not included" };
 
-for (const provider of ["openai", "openrouter"]) {
+for (const provider of ["openai", "openrouter", "cesurpolat"]) {
   test(`${provider}: endpoint, auth, context and reply`, async () => {
     let calls = 0;
     const result = await chatWithJob(job, history, settings(provider), async (url, options) => {
       calls++;
-      assert.equal(String(url), provider === "openai" ? "https://api.openai.com/v1/chat/completions" : "https://openrouter.ai/api/v1/chat/completions");
-      assert.equal(new Headers(options.headers).get("authorization"), "Bearer test-key");
+      assert.equal(String(url), provider === "openai" ? "https://api.openai.com/v1/chat/completions" : provider === "openrouter" ? "https://openrouter.ai/api/v1/chat/completions" : "https://llm.cesurpolat.dev/v1/chat/completions");
+      assert.equal(new Headers(options.headers).get("authorization"), provider === "cesurpolat" ? null : "Bearer test-key");
       assert.equal(options.credentials, "omit");
       assert.equal(options.method, "POST");
       const body = JSON.parse(options.body);
-      assert.equal(body.stream, false); assert.equal(body.model, "test-model");
+      assert.equal(body.stream, false); assert.equal(body.model, provider === "cesurpolat" ? undefined : "test-model");
       assert.deepEqual(body.tools.map((tool) => tool.function.name), ["get_current_job", "get_current_company_stats"]);
       assert.equal(body.messages[0].role, "system");
       const context = JSON.stringify(body.messages[0].content);
@@ -43,6 +43,15 @@ test("setup errors never fetch", async () => {
   assert.equal((await chatWithJob(job, history, { provider: "custom" }, noFetch)).code, "INVALID_PROVIDER");
   assert.equal((await chatWithJob(job, history, { providers: { openai: { apiKey: "x" } } }, noFetch)).code, "MISSING_MODEL");
   assert.equal((await chatWithJob(job, [], settings(), noFetch)).code, "INVALID_MESSAGES");
+});
+test("Free works with only a provider selection and sends no key or model", async () => {
+  const result = await chatWithJob(job, history, { provider: "cesurpolat" }, async (_, options) => {
+    assert.equal(new Headers(options.headers).get("authorization"), null);
+    assert.equal(Object.hasOwn(JSON.parse(options.body), "model"), false);
+    assert.doesNotMatch(options.body, /kariyerlens-free/);
+    return Response.json({ choices: [{ index: 0, message: { role: "assistant", content: "Özet" }, finish_reason: "stop" }] });
+  });
+  assert.deepEqual(result, { ok: true, reply: "Özet" });
 });
 for (const [status, code] of [[401, "AUTH_ERROR"], [403, "AUTH_ERROR"], [402, "QUOTA_ERROR"], [429, "QUOTA_ERROR"], [500, "HTTP_ERROR"]]) {
   test(`HTTP ${status} without retry or leaking body`, async () => {
@@ -75,7 +84,7 @@ const toolReply = (name, id = "tool-1", args = {}) => Response.json({ choices: [
 const textReply = (text = "Veriler alındı.") => Response.json({ choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: text } }] });
 const company = { companyName: "Örnek", profileUrl: "https://www.kariyer.net/firma-profil/ornek-111", followers: "16804 takipçi", openJobs: 3, jobsUrl: "https://www.kariyer.net/is-ilanlari?fpi=111" };
 
-for (const provider of ["openai", "openrouter"]) {
+for (const provider of ["openai", "openrouter", "cesurpolat"]) {
   test(`${provider}: model calls both tools then returns final text`, async () => {
     let modelCalls = 0, jobCalls = 0, companyCalls = 0;
     const result = await chatWithJob({}, history, settings(provider), async (_, options) => {

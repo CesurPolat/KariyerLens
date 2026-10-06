@@ -158,7 +158,7 @@ test("storage failure is closed and never calls provider", async () => {
 });
 test("manifest contains only expected API hosts and correct script order", async () => {
   const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
-  assert.deepEqual(manifest.host_permissions, ["https://candidatesearchapigateway.kariyer.net/*", "https://api.openai.com/*", "https://openrouter.ai/*"]);
+  assert.deepEqual(manifest.host_permissions, ["https://candidatesearchapigateway.kariyer.net/*", "https://api.openai.com/*", "https://openrouter.ai/*", "https://llm.cesurpolat.dev/*"]);
   assert.deepEqual(manifest.content_scripts[0].js, ["src/content/content-script.js", "src/content/company-stats.js", "src/content/chat.js"]);
   const source = await readFile(new URL("../src/content/chat.ts", import.meta.url), "utf8");
   assert.doesNotMatch(source, /chrome\.storage|apiKey|Authorization/);
