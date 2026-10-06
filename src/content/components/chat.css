@@ -1,0 +1,11 @@
+:host{font-family:Arial,sans-serif;color:#0f172a}*{box-sizing:border-box}
+      section{width:100%;border:1px solid #e9d5ff;border-radius:12px;background:#fff;overflow:hidden;box-shadow:0 8px 24px #4c1d9510}
+      header{padding:16px;background:linear-gradient(135deg,#6d28d9,#8b5cf6);color:#fff}h2{font-size:18px;margin:0 0 6px}p{font-size:12px;line-height:1.5;margin:0}
+      nav{display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px;border-bottom:1px solid #f1e8ff}
+      button{font:inherit;font-size:12px;border:1px solid #ddd6fe;border-radius:7px;padding:8px 10px;background:#f5f3ff;color:#6d28d9;cursor:pointer}button:disabled{opacity:.55;cursor:default}button:focus-visible,textarea:focus-visible{outline:2px solid #8b5cf6;outline-offset:2px}
+      #messages{padding:14px;max-height:360px;overflow:auto;min-height:100px;display:flex;flex-direction:column;gap:10px}
+      .message{font-size:13px;line-height:1.55;padding:10px 12px;border-radius:9px;white-space:pre-wrap;overflow-wrap:anywhere;background:#f8fafc}.user{background:#f5f3ff;margin-left:20px}.assistant{margin-right:12px}.message strong{display:block;font-size:11px;margin-bottom:5px;color:#64748b}
+      #suggestions{display:flex;flex-direction:column;gap:6px;padding:0 14px 12px}#suggestions button{text-align:left}
+      form{padding:14px;border-top:1px solid #f1e8ff}textarea{display:block;width:100%;resize:vertical;min-height:76px;max-height:180px;font:inherit;font-size:13px;padding:10px;border:1px solid #ddd6fe;border-radius:8px;color:#0f172a;background:#fff}
+      .footer{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:8px}.footer span{font-size:10px;color:#64748b}#send{color:#fff;background:#7c3aed;border-color:#7c3aed}
+      #status{font-size:12px;line-height:1.5;color:#64748b;padding:0 14px 12px;overflow-wrap:anywhere}#status.error{color:#b91c1c}

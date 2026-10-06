@@ -28,6 +28,7 @@ async function run() {
   input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true, cancelable: true }));
   check(requests.length === 0, "Shift+Enter göndermez");
   input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  await pause();
   check(requests.length === 1 && input.disabled, "Enter gönderir ve beklerken gönderim kapanır");
   check(Object.keys(requests[0].message).sort().join() === "jobId,messages,type", "Mesaj sözleşmesinde anahtar bulunmaz");
   requests[0].resolve({ ok: true, reply: "<b>SQL</b> önemli." }); await pause();
@@ -36,14 +37,14 @@ async function run() {
   column.append(companyCard);
   await pause(); check(host() === sameHost && shadow.querySelector("#messages").textContent.includes("SQL"), "Yeniden oluşturulan sütunda sohbet korunur");
   column.append(document.createElement("div")); await pause(); check(column.querySelectorAll('[data-kariyer-lens-chat="true"]').length === 1, "Yinelenen kart oluşturulmaz");
-  input.value = "Yeni soru"; shadow.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }));
+  input.value = "Yeni soru"; shadow.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   currentJob = "456"; fixture.append(document.createElement("span")); await pause();
   requests[1].resolve({ ok: true, reply: "ESKİ YANIT" }); await pause();
   check(!shadow.querySelector("#messages").textContent && !input.disabled, "İlan değişince sohbet sıfırlanır ve eski yanıt atılır");
-  input.value = "Tekrar denenecek soru"; shadow.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }));
+  input.value = "Tekrar denenecek soru"; shadow.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   requests[2].resolve({ ok: false, message: "Kota doldu" }); await pause();
   check(input.value === "Tekrar denenecek soru" && shadow.querySelector("#status").textContent === "Kota doldu", "Hata gösterilir ve soru taslağa geri döner");
-  input.value = "Bekleyen soru"; shadow.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }));
+  input.value = "Bekleyen soru"; shadow.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   shadow.querySelector("#clear").click(); requests[3].resolve({ ok: true, reply: "TEMİZLENEN YANIT" }); await pause();
   check(!shadow.querySelector("#messages").textContent && !input.disabled, "Temizle eski isteğin yanıtını geçersiz kılar");
   fixture.style.width = "240px"; await pause();

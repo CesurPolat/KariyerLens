@@ -46,6 +46,8 @@ Kaynakları değiştirdikten sonra `npm run build` çalıştırın, uzantı kart
 
 Uzantı geliştirmesinde Vite dev server yerine `vite build --watch` kullanılır; Chrome, Manifest V3 betiklerini yerel `dist/` dosyalarından yükler. `vite.config.ts` içinde ayarlar sayfası, service worker ve üç içerik betiği için ayrı build ortamları tanımlanır. Ayarlar sayfasının HTML/CSS/JS bağlantılarını Vite işler; içerik betikleri klasik script biçiminde üretilir. Manifest ve kullanılan ikonlar küçük bir Vite plugin'iyle çıktıya eklenir. İzleme sırasında bir ortamın yeniden derlenmesi diğer ortamların dosyalarını silmez.
 
+Sohbet kartı, ilan özeti/SVG gösterge ve ayarlar sayfası React + TSX component'leriyle çizilir. İçerik betikleri kartların yerini ve sayfa gezinmesini takip eder; React, kartların içeriğini ve sohbet/ayar durumlarını yönetir. Sohbet ve ilan özeti kapalı Shadow DOM içinde kendi CSS'leriyle çalışır. Sayfa yeniden çizilince kartlar yeniden yerleştirilir; ilan değişince sohbet sıfırlanır ve eski istek yanıtları uygulanmaz. Son başvuru inceleme bilgisi ilan özetindeki tarih etiketlerinin yanında tek kez gösterilir.
+
 ## 🚀 Nasıl çalışır?
 
 ### Asistan kurulumu
@@ -87,6 +89,7 @@ API anahtarları `chrome.storage.local` içinde yalnız bu bilgisayarda saklanı
 `npm test`, derleme ve paket yapısı kontrolleriyle birlikte taklit API ve service worker testlerini çalıştırır. `npm run typecheck`, strict TypeScript kontrolünü tek başına çalıştırır.
 Tarayıcı senaryoları için `npm run test:browser` çalıştırıp `http://127.0.0.1:4173/tests/browser.html` adresini açın. Bu komut önce uzantıyı derler; tarayıcı senaryoları `dist/` içindeki gerçek çıktıları kullanır. Testler gerçek sağlayıcıya istek göndermez ve API anahtarı gerektirmez.
 Şirket kartı senaryoları için aynı sunucuda `http://127.0.0.1:4173/tests/company-stats.html` adresini açın; profil yanıtları taklit edilir.
+React ilan özeti senaryoları: `http://127.0.0.1:4173/tests/job-summary.html`. React ayarlar senaryoları: `http://127.0.0.1:4173/tests/options.html`; depolama erişim hatası için `?storage-failure` ekleyin. Bu sayfalar derlenmiş uzantı kodunu, örnek ilan verilerini ve taklit Chrome depolamasını kullanır; gerçek API anahtarları okunmaz veya kaydedilmez.
 
 ## 🛠️ Teknoloji
 
@@ -96,6 +99,7 @@ Kullandığımız endpoint'lerin parametreleri, yanıt alanları ve doğrulama n
 | --- | --- |
 | Platform | Chrome Extension · Manifest V3 |
 | Dil | TypeScript · strict tip kontrolü |
+| Arayüz | React · TSX component'leri · CSS |
 | Derleme | npm · Vite · yerel JavaScript çıktısı |
 | Arka plan | Chrome Service Worker |
 | Sayfa entegrasyonu | Content Script · DOM · SVG gösterge |
@@ -124,8 +128,11 @@ KariyerLens/
 │   │   ├── chat.ts              # Shadow DOM sohbet kartı
 │   │   ├── company-stats.ts     # Şirket takipçisi ve açık ilan sayısı
 │   │   ├── content-script.ts   # Sayfa entegrasyonu ve göstergeler
+│   │   ├── components/         # ChatCard, JobSummary, sohbet hook'u ve CSS
+│   │   ├── job-insights.ts     # Tarih biçimleme ve alım hareketliliği hesabı
+│   │   ├── mount-job-summary.ts # İlan özeti React kökünün yaşam döngüsü
 │   │   └── globals.d.ts        # İçerik betiklerinin ortak gezinme fonksiyonları
-│   ├── options/                # Sağlayıcı, API anahtarı ve model ayarları
+│   ├── options/                # React OptionsApp ve ayarlar sayfası
 │   └── shared/
 │       ├── messages.ts         # Ortak mesaj türleri
 │       └── types.ts            # İlan, sohbet, ayarlar ve sonuç tipleri
