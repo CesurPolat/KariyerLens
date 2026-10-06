@@ -790,6 +790,318 @@ Alan açıklamaları paylaşılan örnek ve alan adlarından yorumlanmıştır; 
 
 Paylaşılan yanıtta toplam sonuç sayısı veya sayfalama metadatası bulunmuyor. `Size=50` ile 50 kayıt dönmesi, toplam eşleşmenin 50 olduğunu göstermez. Yanıt mevcut `/job` ayrıştırıcısıyla uyumlu değildir. HTTP durum kodu, başarısız/boş yanıtlar ve rate-limit davranışı paylaşılmadı.
 
+## Arama otomatik tamamlama — `POST /Search/autocomplete`
+
+**Kaynak:** Kullanıcının paylaştığı URL, istek gövdesi ve JSON yanıtı. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi.
+
+**Adres:** `https://candidatesearchapigateway.kariyer.net/Search/autocomplete`
+
+HTTP yöntemi kullanıcının sonraki açıklamasıyla POST olarak belirlendi. Başlıklar paylaşılmadı; kimlik doğrulama ve cookie gereksinimleri bilinmiyor.
+
+### İstek gövdesi
+
+Paylaşılan `keyword` değeri `yaz^ l` şeklindedir; `^` ve bölünemez boşluğun kopyalama kaynaklı olup olmadığı bilinmiyor. Aşağıda bu boşluk JSON'un `\u00a0` kaçışıyla gösterilmiştir; değer düzeltilerek varsayılmamıştır.
+
+```json
+{"category":"All","keyword":"yaz^\u00a0l","size":5,"sourceType":"AutoComplete"}
+```
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `category` | String; örnekte `All`, diğer kategoriler bilinmiyor |
+| `keyword` | String; otomatik tamamlama için arama metni |
+| `size` | Sayı; örnekte `5`; şirket ve pozisyon gruplarının her birinde beş sonuç dönüyor. Genel sınırlar doğrulanmadı. |
+| `sourceType` | String; örnekte `AutoComplete`, diğer değerler bilinmiyor |
+
+### Anonimleştirilmiş ve kısaltılmış yanıt örneği
+
+Paylaşılan yanıtta beş şirket ve beş pozisyon bulunuyor. Örnek her gruptan tek kayda indirgenmiş; kimlikler ve adlar değiştirilmiştir. Pozisyon `id` ve şirket `profileId` alanları gerçekte sayıdır; yer tutucular için string gösterilir. Şirket `id` alanı gerçekte de string'dir.
+
+```json
+{
+  "statusCode": "Success",
+  "status": "Success",
+  "data": {
+    "companies": [{
+      "id": "<COMPANY_ID>",
+      "profileId": "<PROFILE_ID>",
+      "name": "Örnek şirket",
+      "occurrence": 2,
+      "searchType": "Fuzzy",
+      "type": "Company",
+      "companyVisible": "Evergreen",
+      "companyVisibleDescription": "Evergreen"
+    }],
+    "positions": [{
+      "id": "<POSITION_ID>",
+      "turkishName": "Örnek pozisyon",
+      "englishName": "Example Position",
+      "occurrence": 0,
+      "searchType": "Fuzzy",
+      "type": "Position"
+    }]
+  },
+  "message": null,
+  "error": null
+}
+```
+
+### Yanıtta gözlenen alanlar
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `statusCode`, `status` | String; her ikisi de `Success` |
+| `data.companies`, `data.positions` | Dizi; şirket ve pozisyon önerileri |
+| `data.companies[].id`, `.profileId`, `.name` | String / sayı / string; şirket kimliği, profil kimliği ve adı; `profileId: 0` gözlendi |
+| `data.companies[].occurrence` | Sayı; `/Search/company` için açıklanan açık ilan sayısıyla aynı alan adı kullanılıyor; bu endpoint'teki anlamı ayrıca doğrulanmadı |
+| `data.companies[].searchType`, `.type` | String; örnekte `Fuzzy` ve `Company` |
+| `data.companies[].companyVisible`, `.companyVisibleDescription` | String; örnekte `Evergreen` veya `Default`; görünürlük değerlerinin anlamı bilinmiyor |
+| `data.positions[].id` | Sayı; pozisyon kimliği |
+| `data.positions[].turkishName`, `.englishName` | String; Türkçe ve İngilizce pozisyon adları |
+| `data.positions[].occurrence` | Sayı; pozisyonla ilişkili ilan sayısı olabilir; kesin anlamı doğrulanmadı |
+| `data.positions[].searchType`, `.type` | String; örnekte `Fuzzy` ve `Position` |
+| `message`, `error` | Örnekte null; hata durumundaki türleri bilinmiyor |
+
+`Fuzzy` değeri gözlendi; eşleşme algoritması ve sıralama kuralları bilinmiyor. Alanların zorunluluğu, boş sonuç davranışı, HTTP durum kodları ve rate-limit davranışı doğrulanmadı. Yanıt mevcut `/job` ayrıştırıcısıyla uyumlu değildir.
+
+## Arama önerileri — `GET /jb/api/search/autocomplete`
+
+**Kaynak:** Kullanıcının paylaştığı URL, GET yöntemi ve JSON yanıt dosyası. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi.
+
+```http
+GET https://candidatewebapigw.kariyer.net/jb/api/search/autocomplete?category=All&keyword=yaz%C4%B1l%C4%B1m&size=10&sourceType=DidYouMean
+```
+
+İstek başlıkları paylaşılmadı; kimlik doğrulama ve cookie gereksinimleri bilinmiyor. İstek gövdesi paylaşılmadı.
+
+| Query parametresi | Paylaşılan değer / açıklama |
+| --- | --- |
+| `category` | `All`; arama kategorisi, diğer değerler bilinmiyor |
+| `keyword` | URL kodlaması çözüldüğünde `yazılım` |
+| `size` | `10`; paylaşılan yanıtta her kategoride on sonuç bulunuyor; genel sınırlar doğrulanmadı |
+| `sourceType` | `DidYouMean`; kaynak türü, diğer değerler ve davranış farkları bilinmiyor |
+
+### Anonimleştirilmiş ve kısaltılmış yanıt örneği
+
+Yanıtta `Firma Adı` ve `Pozisyon` kategorileri bulunuyor. Her kategori on kayıt içeriyor; aşağıdaki örnekte birer kayıt gösterilmiştir. Kimlikler ve adlar değiştirilmiş, sayısal `profileId` anonimleştirme için string yer tutucuyla gösterilmiştir. `id` ve `count` paylaşılan yanıtta da string'dir.
+
+```json
+{
+  "version": "1.0",
+  "statusCode": 200,
+  "result": {
+    "autoCompleteItems": [
+      {
+        "autoCompleteLists": [{
+          "id": "<COMPANY_ID>",
+          "name": "Örnek şirket",
+          "image": "",
+          "count": "33",
+          "searchType": "ExactMatch",
+          "profileId": "<PROFILE_ID>",
+          "type": 1
+        }],
+        "category": "Firma Adı"
+      },
+      {
+        "autoCompleteLists": [{
+          "id": "<POSITION_ID>",
+          "name": "Örnek pozisyon",
+          "image": "",
+          "count": "13",
+          "searchType": "ExactMatch",
+          "profileId": 0,
+          "type": 3
+        }],
+        "category": "Pozisyon"
+      }
+    ]
+  }
+}
+```
+
+### Yanıtta gözlenen alanlar
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `version` | String; örnekte `1.0` |
+| `statusCode` | Sayı; gövdede `200`; HTTP durum kodu ayrıca paylaşılmadı |
+| `result.autoCompleteItems` | Dizi; kategori grupları |
+| `autoCompleteItems[].category` | String; örnekte `Firma Adı` ve `Pozisyon` |
+| `autoCompleteItems[].autoCompleteLists` | Dizi; kategoriye ait öneriler |
+| `autoCompleteLists[].id`, `.name` | String; sonuç kimliği ve adı |
+| `autoCompleteLists[].image` | String; örnekte boş, dolu değer yapısı doğrulanmadı |
+| `autoCompleteLists[].count` | String; sonuçla ilişkili sayı; açık ilan sayısı olduğu bu endpoint için doğrulanmadı |
+| `autoCompleteLists[].searchType` | String; örnekte `ExactMatch`; eşleşme kuralları bilinmiyor |
+| `autoCompleteLists[].profileId` | Sayı; profil kimliği, `0` da gözlendi |
+| `autoCompleteLists[].type` | Sayı; firma grubunda `1` ve `2`, pozisyon grubunda `3` gözlendi; kodların kesin anlamları doğrulanmadı |
+
+Bu GET endpoint'i, önceki `POST /Search/autocomplete` endpoint'inden farklı bir host, parametre aktarımı ve yanıt yapısı kullanır. POST yanıtındaki `data.companies`/`data.positions` yerine burada `result.autoCompleteItems[].autoCompleteLists` vardır; tür kodları sayısaldır ve `count` string'dir. Paylaşılan örneklerde `sourceType` ve anahtar kelime de farklı olduğundan sonuç farkları yalnız endpoint farkına bağlanamaz. Sayısal `statusCode: 200` mevcut `/job` kodunun beklediği `Success` string'iyle uyumlu değildir. Başarısız/boş yanıtlar, alan zorunlulukları, HTTP durumları ve rate-limit davranışı bilinmiyor.
+
+## İlan arama — `POST /search`
+
+**Kaynak:** Kullanıcının paylaştığı URL, POST yöntemi, istek gövdesi ve JSON yanıt dosyası. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi.
+
+**Adres:** `https://candidatesearchapigateway.kariyer.net/search`
+
+Başlıklar paylaşılmadı; kimlik doğrulama ve cookie gereksinimleri bilinmiyor.
+
+### Anonimleştirilmiş istek gövdesi
+
+`memberId` paylaşılan istekte sayıdır; gerçek aday kimliği yerine string yer tutucu kullanılmıştır.
+
+```json
+{"memberId":"<MEMBER_ID>","currentPage":1,"size":50,"keyword":"yazılım","calculateHiddenJobCount":true}
+```
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `memberId` | Sayı; üye kimliği. Zorunluluğu ve kimlik doğrulamayla ilişkisi doğrulanmadı. |
+| `currentPage` | Sayı; istenen sayfa, örnekte `1`; diğer sayfaların davranışı doğrulanmadı |
+| `size` | Sayı; istenen sayfa boyutu, örnekte `50`; sınırlar bilinmiyor |
+| `keyword` | String; arama metni, örnekte `yazılım` |
+| `calculateHiddenJobCount` | Boolean; gizli ilan sayısının hesaplanmasını isteyen bayrak olarak yorumlandı |
+
+### Çok sayıda filtre seçilerek oluşturulan istek
+
+**Kaynak:** Kullanıcının arayüzde çok sayıda seçenek işaretleyerek paylaştığı ikinci `/search` gövdesi. Kullanıcı sektör ve eğitim gibi listelerde tüm seçenekleri seçmediğini belirtti; aşağıdaki kodlar eksiksiz seçenek kataloğu değildir. Bu isteğin yanıtı henüz paylaşılmadı; aşağıdaki yanıt örneği önceki, yalnız anahtar kelime içeren isteğe aittir.
+
+`memberId` anonimleştirilmiştir. Filtre kodları, aday/ilan kimliği değil seçenek değerleri olduklarından paylaşılan biçimleriyle korunmuştur.
+
+```json
+{
+  "memberId": "<MEMBER_ID>",
+  "currentPage": 1,
+  "size": 50,
+  "keyword": "yazılım",
+  "workModels": ["0", "1", "2"],
+  "jobProperties": ["1", "2", "3", "4", "5"],
+  "sectors": ["001000000", "002000000", "040000000"],
+  "positionLevels": ["1", "2", "3"],
+  "departments": ["1", "2", "3"],
+  "workTypes": ["1", "2", "4", "5"],
+  "educationLevels": ["DM", "DO", "MM", "MO"],
+  "positions": ["1327", "1603", "1351"],
+  "companyProperties": ["1", "2"],
+  "date": ["4", "7"],
+  "language": ["1", "2"],
+  "handicappedStatus": "30",
+  "dontShowAppliedJobs": true,
+  "dontShowInspectedJobs": true,
+  "isEasyApply": true,
+  "workExperience": {"type": 1},
+  "location": {
+    "cities": ["998", "34", "82"],
+    "districts": ["5785", "434", "437"]
+  },
+  "calculateHiddenJobCount": true
+}
+```
+
+| Ek alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `workModels` | String dizisi; önceki filtre yanıtında `0` = İş Yerinde, `1` = Uzaktan / Remote, `2` = Hibrit olarak gözlendi |
+| `jobProperties`, `companyProperties` | String dizisi; ilan ve şirket özellik kodları |
+| `sectors`, `positionLevels`, `departments` | String dizisi; sektör, pozisyon seviyesi ve departman kodları |
+| `workTypes`, `educationLevels`, `positions` | String dizisi; çalışma türü, eğitim seviyesi ve pozisyon kodları |
+| `date`, `language` | String dizisi; tarih ve dil filtre kodları; sayısal görünen kodlar gün sayısı veya dil adı olarak varsayılmamalı |
+| `handicappedStatus` | String; örnekte `30`; engellilik filtresi kodunun anlamı doğrulanmadı |
+| `dontShowAppliedJobs` | Boolean; başvurulmuş ilanları gizleme bayrağı olarak yorumlandı |
+| `dontShowInspectedJobs` | Boolean; incelenmiş ilanları gizleme bayrağı olarak yorumlandı |
+| `isEasyApply` | Boolean; kolay başvuru filtresi olarak yorumlandı |
+| `workExperience.type` | Sayı; örnekte `1`; deneyim filtresi kodunun anlamı bilinmiyor. Kaydedilmiş arama yanıtında görülen string `All` ile aynı türde değildir. |
+| `location.cities`, `location.districts` | String dizisi; şehir ve ilçe seçenek kimlikleri; özel konum seçeneklerinin anlamları doğrulanmadı |
+
+Alan adları ve türleri bu istek gövdesinde gözlenmiştir. Kod/ad eşleştirmeleri için yanıtın `filters` seçenekleri kullanılabilir; eşleştirme görülmeden kod anlamı tahmin edilmemelidir. Aynı filtre içindeki seçeneklerin ve farklı filtrelerin AND/OR birleşme kuralları, boş dizi ile alanın gönderilmemesi arasındaki fark ve tüm seçeneklerin seçilmesinin filtreyi kaldırıp kaldırmadığı doğrulanmadı.
+
+### Anonimleştirilmiş ve kısaltılmış yanıt örneği
+
+Paylaşılan yanıtta `jobs.items` içinde 53 ilan bulunuyor; üçünde `isSponsored: true`. Toplam sayılar `1139` ve sponsorlar hariç `1136` olarak dönüyor. `size: 50` ile 53 sonuç gözlenmesi, bu örnekte sponsorların ek sonuçlar olarak döndüğünü düşündürüyor; bu davranışın genel garantisi doğrulanmadı.
+
+Aşağıda tek ilan ve yanıt alanlarının bir bölümü gösterilmiştir. Gerçek kimlikler, şirket/pozisyon adları ve bağlantılar değiştirilmiştir. Sayısal kimlikler yer tutucu için string gösterilir. Toplam sayılar paylaşılan yanıttan korunmuştur; kısaltılmış `items` dizisinin uzunluğunu temsil etmez.
+
+```json
+{
+  "statusCode": "Success",
+  "status": "Success",
+  "data": {
+    "totalJobCount": 1139,
+    "totalJobCountWithOutSponsored": 1136,
+    "title": "İş İlanları - Güncel İş Fırsatları",
+    "jobs": {
+      "items": [{
+        "id": "<JOB_ID>",
+        "title": "Örnek pozisyon",
+        "companyName": "Örnek şirket",
+        "jobUrl": "/is-ilani/<JOB_SLUG>",
+        "companyUrl": "/firma-profil/<COMPANY_SLUG>",
+        "companyId": "<COMPANY_ID>",
+        "profileId": "<PROFILE_ID>",
+        "locationText": "Örnek şehir",
+        "workType": "FullTime",
+        "workTypeText": "Tam Zamanlı",
+        "workModel": "OnSite",
+        "isSponsored": true,
+        "isRealSponsored": true,
+        "isEasyApply": true,
+        "memberJobStatus": "Default",
+        "sectors": [],
+        "locations": [],
+        "chips": [],
+        "appliedDetail": null,
+        "redirectedInformation": null
+      }],
+      "companyItems": [],
+      "companyProfileItems": [],
+      "currentPage": 1
+    },
+    "jobSortType": "SmartSort",
+    "searchUrl": "/is-ilanlari#&kw=yazılım",
+    "locationText": "",
+    "blueCollarJobs": {"items": [], "total": 0},
+    "isSearched": true,
+    "currentPage": 1,
+    "hiddenJobCount": 0,
+    "moduleTitleInfo": {"title": "Öne Çıkan İlanlar", "subText": ""},
+    "isRecommendationFromJobPreferences": false
+  },
+  "message": null,
+  "error": null
+}
+```
+
+### Yanıtta gözlenen alanlar
+
+Alan açıklamaları paylaşılan örnek ve alan adlarından yorumlanmıştır; zorunlulukları doğrulanmadı.
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `statusCode`, `status` | String; her ikisi de `Success` |
+| `data.breadCrumb.items[]` | Nesne; string `text` ve `url` alanlarıyla gezinme bağlantıları |
+| `data.totalJobCount`, `data.totalJobCountWithOutSponsored` | Sayı; toplam ilan ve sponsorlar hariç toplam olarak yorumlandı; `WithOut` yazımı yanıtla aynıdır |
+| `data.title` | String; sonuç sayfasının başlığı |
+| `data.jobs.items` | Dizi; ilan sonuçları |
+| `data.jobs.companyItems`, `.companyProfileItems` | Dizi; örnekte boş, eleman yapıları bilinmiyor |
+| `data.currentPage`, `data.jobs.currentPage` | Sayı; her ikisi de örnekte `1` |
+| `data.filters` | Nesne; filtre seçenekleri, sayıları, konum ve sıralama bilgileri |
+| `data.jobSortType` | String; örnekte `SmartSort` |
+| `data.jobSeo` | Nesne; arama başlıkları, meta açıklamalar, canonical/önceki/sonraki sayfa bağlantıları ve içerik alanları |
+| `data.searchUrl`, `data.locationText` | String; arama sayfası yolu ve konum açıklaması; konum örnekte boş |
+| `data.blueCollarJobs` | Nesne; `items` dizisi ve sayısal `total`, örnekte boş dizi ve `0` |
+| `data.isSearched` | Boolean; arama yapılma bayrağı olarak yorumlandı |
+| `data.noScriptUrls` | Nesne; `noScriptUrlResponse`, `text`, `noScriptUrlLinks` alanlarıyla alternatif bağlantı bilgileri |
+| `data.suggestions` | Dizi; filtre önerileri; örnekte konum önerisi bulunuyor |
+| `data.hiddenJobCount` | Sayı; gizli ilan sayısı olarak yorumlandı, örnekte `0`; gizleme koşulları bilinmiyor |
+| `data.moduleTitleInfo` | Nesne; string `title` ve `subText` |
+| `data.isRecommendationFromJobPreferences` | Boolean; iş tercihlerinden öneri üretimiyle ilgili bayrak olarak yorumlandı |
+| `message`, `error` | Örnekte null; hata durumundaki türler bilinmiyor |
+
+`jobs.items[]` ilan alanları, yukarıdaki ilan detay önerileri bölümünde belgelenen başlık, şirket, logo, konum, çalışma modeli, tarihler, aday etkileşimi, sponsorluk, sektör, pozisyon ve yönlendirme alanlarını da içeriyor. Bu arama örneğinde `jobRecommendationModel` null veya string olarak gözlendi; öneri endpoint'i örneğinde yalnız null görülmüştü. `sectors`, `locations` ve `chips` dizi olarak döner; boş olabilir. `redirectedInformation` bu örnekte null'dır.
+
+`filters` içinde sektör, pozisyon seviyesi, departman, çalışma alanı/türü/modeli, eğitim, şirket/ilan özellikleri, pozisyon, dil, engellilik, tarih, deneyim ve konum grupları ile sıralama alanları bulunuyor. `suggestions[]` içinde `title`, `suggestionType`, `suggestionSubType`, gösterim kurallarını taşıyan `rules` ve `items` alanları var; öneri elemanlarında `id`, `name`, `count`, `filterType`, `title`, `url` görülüyor. Bu yanıt alanları tek başına ek istek filtrelerinin kabul edildiğini doğrulamaz.
+
+Yanıt `data.jobs.items` üzerinden ayrıştırılmalıdır; mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Arama eşleşme kuralları, sayfalama garantileri, başlıksız/oturumsuz erişim, başarısız/boş yanıtlar, HTTP durumları ve rate-limit davranışı doğrulanmadı.
+
 ## Şirket sayıları için mevcut veri kaynakları
 
 Uzantının çalışma kodunda bu sayılar için henüz bir JSON endpoint'i kullanılmıyor. Kullanıcının açıklamasına göre `/Search/company` yanıtındaki `data[].occurrence` şirketin açık ilan sayısını verir; bu kaynak henüz çalışma koduna entegre edilmedi.
@@ -803,7 +1115,7 @@ Profil HTML isteği aynı kaynak üzerinden yapılır. Bu bölüm sayfa entegras
 
 - `/job` için oturum bilgileri ve kişisel veriler çıkarılmış gerçek JSON yanıtı.
 - Şirket detayı ve açık ilan sayısı için varsa JSON endpoint'leri.
-- İlan arama endpoint'i ve sayfalama/filtre parametreleri.
+- `POST /search` için kimlik doğrulama, sayfalama/sponsor sonuç davranışı, filtre kod/ad eşleştirmeleri ve filtrelerin birleşme kuralları.
 - `/candidates/base-info` için HTTP yöntemi, istek gereksinimleri ve başarısız yanıt örnekleri.
 - `/jb/api/candidates/getcandidateinformationforcookie` için HTTP yöntemi, istek gereksinimleri ve durum kodlarının anlamları.
 - `/search/savedsearches` için HTTP yöntemi, `size`/`from` sayfalama davranışı ve başarısız yanıt örnekleri.
@@ -812,5 +1124,7 @@ Profil HTML isteği aynı kaynak üzerinden yapılır. Bu bölüm sayfa entegras
 - `/candidates/get-salary-by-position` için HTTP yöntemi, `ApiKey` gereksinimleri, maaş birimi/dönemi ve başarısız veya verisiz yanıtlar.
 - `/get-job-application-detail` için HTTP yöntemi, yönlendirilmiş ilan/başvuru bulunmaması durumları ve süreç/etkileşim kodları.
 - `/Search/company` için HTTP yöntemi, kimlik doğrulama ve sonuç sınırı/sayfalama davranışı.
+- `POST /Search/autocomplete` için başlıklar, özgün `keyword` değeri, `occurrence` anlamları ve sonuç sınırları.
+- `GET /jb/api/search/autocomplete` için başlıklar, `type`/`count` anlamları, kategori ve sonuç sınırları.
 
 Yeni kayıtlar gerçek istekte görülen URL ve alanlarla eklenecek; endpoint adları tahmin edilerek yazılmayacak. Paylaşılan örneklerden Cookie, Authorization, token ve kişisel veriler çıkarılmalıdır.
