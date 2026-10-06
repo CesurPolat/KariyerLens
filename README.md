@@ -55,7 +55,7 @@ Sohbet kartı, ilan özeti/SVG gösterge ve ayarlar sayfası React + TSX compone
 1. Değişikliklerden sonra `chrome://extensions/` üzerinden uzantıyı yeniden yükleyin, ardından ilan sayfasını yenileyin.
 2. Uzantı simgesine veya sohbet kartındaki **Ayarlar** düğmesine tıklayın.
 3. **OpenAI** veya **OpenRouter** seçin, kendi API anahtarınızı ve hesabınızın erişebildiği modelin tam kimliğini girip **Kaydet** düğmesine basın. OpenRouter kimlikleri `sağlayıcı/model` biçimindedir.
-4. İlanın sağ sütunundaki sohbetten sorunuzu gönderin. Enter gönderir; Shift+Enter yeni satır açar.
+4. Sağ alttaki sohbet baloncuğuna tıklayıp sorunuzu gönderin. Panel sayfayı kaydırırken ekranda kalır; × veya Escape ile kapanır. Kapatıp açınca sohbet korunur; ilan değişince temizlenir. Enter gönderir; Shift+Enter yeni satır açar.
 
 Her sağlayıcının anahtarı ve modeli ayrı saklanır. Anahtarı ayarlardaki silme düğmesiyle kaldırabilirsiniz. Anahtar ve model girilmeden AI isteği gönderilmez. Ayrı bir sunucu gerekmez. Sohbet, background service worker içinde LangChain agent kullanır; seçtiğiniz model **tool calling** desteklemelidir.
 

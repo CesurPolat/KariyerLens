@@ -5,7 +5,7 @@ import { ChatCard } from "./components/ChatCard.js";
 (() => {
   const host = document.createElement("div");
   host.dataset.kariyerLensChat = "true";
-  host.style.cssText = "display:block;width:100%;min-width:0;margin-bottom:20px;";
+  host.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:2147483647;display:block;width:auto;max-width:calc(100vw - 32px);margin:0;";
   const root = createRoot(host.attachShadow({ mode: "closed" }));
   let jobId: string | undefined;
 
@@ -17,10 +17,8 @@ import { ChatCard } from "./components/ChatCard.js";
       lastRequestedJobId = "";
       void loadCurrentJob();
     }
-    const column = jobId && document.querySelector(".job-detail-right-column");
-    const companyCard = column && column.querySelector(".job-detail-company-card");
-    if (!companyCard) { host.remove(); return; }
-    if (host.previousElementSibling !== companyCard) companyCard.insertAdjacentElement("afterend", host);
+    if (!jobId || !document.body) { host.remove(); return; }
+    if (host.parentElement !== document.body) document.body.append(host);
   }
   let scheduled = false;
   new MutationObserver(() => {

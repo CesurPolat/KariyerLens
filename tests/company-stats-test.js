@@ -63,7 +63,7 @@ async function run() {
   check(requests.length === 1 && jobs().textContent === "3 açık iş ilanı", "Yeniden oluşturulan kart önbelleği kullanır");
   fixture.append(document.createElement("span")); await pause();
   check(fixture.querySelectorAll('[data-kariyer-lens-company-stats]').length === 1, "İstatistik satırı yinelenmez");
-  check(card.nextElementSibling?.hasAttribute("data-kariyer-lens-chat"), "Sohbet şirket kartının hemen altında kalır");
+  check(document.querySelector('[data-kariyer-lens-chat]')?.parentElement === document.body, "Yüzen sohbet şirket kartından bağımsız kalır");
   timeOffset = 300001; fixture.append(document.createElement("span")); await pause();
   check(requests.length === 2, "Beş dakika sonra profil yeniden istenir");
   requests[1].resolve(profile("111", 0, "0")); main.replaceChildren(); await pause();
