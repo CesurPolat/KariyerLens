@@ -43,6 +43,7 @@ export const KARIYER_TOOLS: Endpoint[] = [
   { name: "search_jobs", description: "Anahtar kelime ve belgelenmiş filtre kodlarıyla ilan arar. Kodları tahmin etme; arama filtrelerinden veya kullanıcıdan edin. Kişisel filtreler için memberId aday profilinden alınır.", origin: SEARCH, path: "/search", schema: searchSchema, method: "POST", fixed: { dontAddLog: true } },
   { name: "get_related_searches", description: "Anahtar kelimeyle ilgili arama terimlerini getirir.", origin: SEARCH, path: "/Search/relatedsearch", schema: z.object({ keyword }).strict(), method: "POST" },
   { name: "get_resumes", description: "Adayın özgeçmişlerini listeler; tam CV içeriğini getirmez.", origin: CANDIDATE, path: "/jb/api/candidates/resumes", schema: page("skip", 8), auth: "bearer", assumedGet: true },
+  { name: "get_resume", description: "Adayın seçili özgeçmişinin detaylarını getirir. resumeId değerini get_resumes sonucundan al; kimlik tahmin etme.", origin: CANDIDATE, path: "/jb/api/candidates/resume", schema: z.object({ resumeId: z.string().min(1).max(512).regex(/^[A-Za-z0-9+/=_!\-]+$/) }).strict(), auth: "bearer" },
   { name: "get_resume_views", description: "Aday özgeçmişlerinin şirketler tarafından görüntülenme kayıtlarını listeler.", origin: CANDIDATE, path: "/jb/api/candidates/resumes/view", schema: page("skip", 8), auth: "bearer", fixed: { ClientType: 1 } },
   { name: "get_cover_letters", description: "Adayın kayıtlı ön yazılarını listeler.", origin: CANDIDATE, path: "/coverletters", schema: page("index", 10), auth: "bearer" },
   { name: "get_followed_companies", description: "Adayın takip ettiği şirketleri listeler.", origin: SEARCH, path: "/Search/my-followed-companies", schema: empty, auth: "bearer" },
@@ -98,7 +99,15 @@ export async function callKariyerTool(name: string, input: unknown, jobId: strin
     if ((envelope.statusCode !== undefined && !["Success", 200, "200"].includes(envelope.statusCode as string | number)) || header.isSuccess === false || envelope.isSuccess === false || record(envelope.body).isSuccess === false)
       return failure("API_ERROR", "Kariyer.net işlemi başarısız olarak bildirdi.");
     const state = { remaining: 2000, characters: 30000, truncated: false };
-    return { ok: true, data: sanitize(envelope.data ?? envelope.result ?? envelope.body ?? raw, state), truncated: state.truncated, methodAssumed: Boolean(endpoint.assumedGet) };
+    let data = envelope.data ?? envelope.result ?? envelope.body ?? raw;
+    // The list's opaque CV identifier is needed for get_resume, but is not a session credential.
+    if (name === "get_resumes" && Array.isArray(record(data).resumeList)) {
+      data = { ...record(data), resumeList: (record(data).resumeList as unknown[]).map(item => {
+        const resume = record(item);
+        return { ...resume, ...(typeof resume.encryptedId === "string" ? { resumeId: resume.encryptedId } : {}) };
+      }) };
+    }
+    return { ok: true, data: sanitize(data, state), truncated: state.truncated, methodAssumed: Boolean(endpoint.assumedGet) };
   } catch (error) {
     if (signal?.aborted) return failure("CANCELLED", "İstek durduruldu.");
     if (error instanceof Error && /TimeoutError|AbortError/.test(error.name)) return failure("TIMEOUT", "Kariyer.net isteği zaman aşımına uğradı.");

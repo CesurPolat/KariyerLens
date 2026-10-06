@@ -8,10 +8,11 @@ const search = "https://candidatesearchapigateway.kariyer.net";
 const credentials = { bearer: "Bearer session-secret", apiKey: "salary-secret" };
 
 test("every documented endpoint has a fixed origin, method and usable schema", async () => {
-  assert.equal(KARIYER_TOOLS.length, 18);
-  assert.equal(new Set(KARIYER_TOOLS.map(item => item.name)).size, 18);
+  assert.equal(KARIYER_TOOLS.length, 19);
+  assert.equal(new Set(KARIYER_TOOLS.map(item => item.name)).size, 19);
   for (const endpoint of KARIYER_TOOLS) {
     const input = endpoint.name === "get_salary_by_position" ? { positionId: "1327" }
+      : endpoint.name === "get_resume" ? { resumeId: "example+id/==!e!" }
       : endpoint.name === "search_companies" ? { Keyword: "Örnek" }
       : ["autocomplete_search", "get_search_suggestions", "get_related_searches"].includes(endpoint.name) ? { keyword: "yazılım" } : {};
     let requests = 0;
@@ -44,7 +45,30 @@ test("unknown tools, injected parameters and missing credentials never fetch", a
     ["get_saved_searches", { size: 51 }, "INVALID_ARGUMENTS"],
     ["get_salary_by_position", { positionId: "../x" }, "INVALID_ARGUMENTS"],
     ["get_resumes", {}, "AUTH_REQUIRED"],
+    ["get_resume", {}, "INVALID_ARGUMENTS"],
+    ["get_resume", { resumeId: "id&other=value" }, "INVALID_ARGUMENTS"],
+    ["get_resume", { resumeId: "example==!e!" }, "AUTH_REQUIRED"],
   ]) assert.equal((await callKariyerTool(name, input, "123", {}, noFetch)).code, code);
+});
+
+test("resume list identifiers support a bearer GET detail request without losing special characters", async () => {
+  const resumeId = "example+id/==!e!";
+  const list = await callKariyerTool("get_resumes", {}, "123", credentials, async () => Response.json({
+    statusCode: 200, result: { resumeList: [{ encryptedId: resumeId, resumeName: "Örnek CV", token: "secret" }] },
+  }));
+  assert.deepEqual(list.data.resumeList, [{ resumeName: "Örnek CV", resumeId }]);
+  const result = await callKariyerTool("get_resume", { resumeId: list.data.resumeList[0].resumeId }, "123", credentials, async (url, options) => {
+    assert.equal(url.origin, candidate);
+    assert.equal(url.pathname, "/jb/api/candidates/resume");
+    assert.equal(url.searchParams.get("resumeId"), resumeId);
+    assert.match(url.search, /%2B/);
+    assert.equal(options.method, "GET");
+    assert.equal(options.headers.Authorization, credentials.bearer);
+    return Response.json({ version: "1.0", statusCode: 200, result: { resumeId, summary: "Örnek özet", token: "secret" } });
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.methodAssumed, false);
+  assert.deepEqual(result.data, { resumeId, summary: "Örnek özet" });
 });
 
 test("all response wrappers preserve data and distinguish API failure from application eligibility", async () => {

@@ -6,7 +6,7 @@ Her yeni endpoint için yöntem, adres, parametreler, oturum gereksinimi, anonim
 
 ## KariyerLens sohbet araçları
 
-Bu dokümandaki URL'si bilinen 18 ek endpoint `src/background/kariyer-tools.ts` üzerinden sohbet ajanına bağlandı. Mevcut `get_current_job` ve `get_current_company_stats` ile toplam 20 tool sunulur. Aşağıdaki endpoint kayıtlarında geçen “henüz entegre edilmedi” ifadeleri kayıtların oluşturulduğu tarihe aittir; güncel kod durumu bu bölümdedir. Canlı API uyumluluğu bu entegrasyon sırasında doğrulanmadı.
+Bu dokümandaki URL'si bilinen 19 ek endpoint `src/background/kariyer-tools.ts` üzerinden sohbet ajanına bağlandı. Mevcut `get_current_job` ve `get_current_company_stats` ile toplam 21 tool sunulur. Aşağıdaki endpoint kayıtlarında geçen “henüz entegre edilmedi” ifadeleri kayıtların oluşturulduğu tarihe aittir; güncel kod durumu bu bölümdedir. Canlı API uyumluluğu bu entegrasyon sırasında doğrulanmadı.
 
 | Tool | Endpoint |
 | --- | --- |
@@ -23,6 +23,7 @@ Bu dokümandaki URL'si bilinen 18 ek endpoint `src/background/kariyer-tools.ts` 
 | `search_jobs` | `POST /search` |
 | `get_related_searches` | `POST /Search/relatedsearch` |
 | `get_resumes` | `/jb/api/candidates/resumes` |
+| `get_resume` | `GET /jb/api/candidates/resume` |
 | `get_resume_views` | `GET /jb/api/candidates/resumes/view` |
 | `get_cover_letters` | `GET /coverletters` |
 | `get_followed_companies` | `GET /Search/my-followed-companies` |
@@ -33,7 +34,7 @@ Yöntemi paylaşılmamış endpointlerde GET varsayılır; tool açıklaması ve
 
 `webRequest` ve Kariyer.net host izni, sitenin kendi isteklerinde gönderdiği Bearer ve maaş `ApiKey` başlıklarını gözlemlemek için kullanılır. Yalnız Kariyer.net kaynaklı sekme istekleri izlenir. Başlıklar hedef API origin'i bazında worker belleğinde tutulur; 30 dakika yeni kimlik doğrulama başlığı gözlenmezse veya worker kapanırsa yeniden yakalanmaları gerekir. Diske veya model sağlayıcısına yazılmazlar. Uzantıyı yeniden yükledikten sonra Kariyer.net oturumunu açıp ilgili profil/ilan/maaş sayfasını yenilemek gerekir. Başlık yoksa kimlik doğrulama gerektiren tool `AUTH_REQUIRED` döndürür. Token yenileme veya erişim korumasını aşma uygulanmaz.
 
-Başarı sarmalayıcıları (`data`, `result`, `header/body`, doğrudan JSON) ayrıştırılır. Oturum alanları ve şifrelenmiş kimlikler model çıktısından çıkarılır, URL query/hash bölümleri kaldırılır. Yanıtlar derinlik, alan, dizi ve metin bütçesiyle sınırlandırılır; eksilen veri için `truncated` döner. Kişisel profil, CV, ön yazı ve başvuru bilgileri kullanıcı bunları sorduğunda alınır ve sohbet için seçili model sağlayıcısına tool sonucu olarak gönderilir. CV listesi tam özgeçmiş içeriği değildir. Her sohbet isteğinin mevcut üç tool çağrısı ve 25 saniyelik toplam süresi korunur.
+Başarı sarmalayıcıları (`data`, `result`, `header/body`, doğrudan JSON) ayrıştırılır. Oturum alanları ve şifrelenmiş kimlikler model çıktısından çıkarılır, URL query/hash bölümleri kaldırılır. CV listesinde `encryptedId`, detay çağrısı için `resumeId` adıyla korunur; bu kimlik oturum başlığı değildir. Yanıtlar derinlik, alan, dizi ve metin bütçesiyle sınırlandırılır; eksilen veri için `truncated` döner. Kişisel profil, CV, ön yazı ve başvuru bilgileri kullanıcı bunları sorduğunda alınır ve sohbet için seçili model sağlayıcısına tool sonucu olarak gönderilir. CV listesi tam özgeçmiş içeriği değildir; `get_resume` seçili CV'nin detayını getirir. Her sohbet isteğinin mevcut üç tool çağrısı ve 25 saniyelik toplam süresi korunur.
 
 ## İlan detayı — `GET /job`
 
@@ -1332,6 +1333,38 @@ CV alanları `result.resumeList[]` altındadır. Açıklamalar alan adları ve p
 | `isAnonymized` | Boolean; CV'nin anonimleştirilme bayrağı olarak yorumlandı |
 
 Yanıt `result.resumeList` üzerinden ayrıştırılmalıdır. Sayısal `statusCode: 200` ve özgeçmiş listesi mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Sayfalama garantileri, boş/başarısız yanıtlar, HTTP durumları ve rate-limit davranışı doğrulanmadı.
+
+## Özgeçmiş detayı — `GET /jb/api/candidates/resume`
+
+**Kaynak:** Kullanıcının paylaştığı URL, GET/Bearer bilgisi ve JSON yanıtı. Canlı istek yeniden çalıştırılmadı.
+
+```http
+GET https://candidatewebapigw.kariyer.net/jb/api/candidates/resume?resumeId=<URL_ENCODED_RESUME_ID>
+Authorization: Bearer <SESSION_TOKEN>
+```
+
+`resumeId` zorunlu string parametredir; özgeçmiş listesindeki `encryptedId` değerinden alınır. `get_resumes` bu değeri `resumeId` adıyla döndürür. Kimlik URL'ye `URLSearchParams` ile eklenir; `+`, `/`, `=` gibi karakterler kodlanır. Gerçek aday kimliği kaynak koda sabitlenmez. Tool şeması 1–512 karakter ve kimlikte kullanılan harf, sayı, `+`, `/`, `=`, `_`, `!`, `-` karakterlerini kabul eder; bunlar yerel doğrulama sınırlarıdır.
+
+Anonimleştirilmiş, kısaltılmış yanıt örneği:
+
+```json
+{
+  "version": "1.0",
+  "statusCode": 200,
+  "result": {
+    "resumeId": "<REDACTED>",
+    "name": "Örnek",
+    "surname": "Aday",
+    "title": "Örnek CV",
+    "email": "aday@example.com",
+    "summary": "Örnek özgeçmiş özeti"
+  }
+}
+```
+
+Detay `result` altındadır. Paylaşılan örnekte iletişim ve konum alanları; `generalResumeInformation`, `contactInformation`, `jobExperienceInformation`, `educationInformation`, `foreignLanguageInformation`, `computerSkillsInformation`, `certificateInformation`, `examInformation`, `qualificationsInformation`, `seminarAndCourseInfomation`, `scholarshipsAndProjectsInformation`, `referencesInformation`, `projectsInformation` ve diğer CV bölümleri bulunur. Alanların zorunluluğu ve tüm kod değerleri doğrulanmadı. Büyük CV yanıtları mevcut tool bütçesiyle kısaltılabilir; bu durumda `truncated: true` döner.
+
+Bearer başlığı mevcut oturum yakalama mekanizmasından alınır. Eksik/geçersiz oturum `AUTH_REQUIRED` döndürür. Boş/başarısız API yanıtları ve rate-limit davranışı canlı olarak doğrulanmadı.
 
 ## Özgeçmiş görüntülenmeleri — `GET /jb/api/candidates/resumes/view`
 
