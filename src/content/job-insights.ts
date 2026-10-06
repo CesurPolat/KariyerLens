@@ -65,12 +65,19 @@ export function getHiringActivity(data: Job, insight: ApplicationInsight | null)
   if (/bugün|az önce|saat|dakika/.test(review)) reviewDays = 0;
   else if (/dün/.test(review)) reviewDays = 1;
   else {
-    const duration = review.match(/(\d+)\s*(gün|hafta|ay)/);
+    // A trailing + gives a lower bound; 15+ days is already in the oldest bucket.
+    const duration = review.match(/(\d+)\s*\+?\s*(gün|hafta|ay)/);
     if (duration) reviewDays = Number(duration[1]) * ({ gün: 1, hafta: 7, ay: 30 }[duration[2] as "gün" | "hafta" | "ay"]);
   }
   if (/henüz|incelenmedi|incelemedi/.test(review)) reviewDays = Infinity;
   if (reviewDays === null || !insight) {
-    return { score: null, label: "Devir bilgisi yetersiz", copy: "Şirketin son başvuru inceleme zamanı bilinmiyor.", color: "#94a3b8" };
+    const missing: string[] = [];
+    if (reviewDays === null) missing.push("son başvuru inceleme zamanı");
+    if (!insight) {
+      if (parseApplicationCount(data.applicationCount) === null) missing.push("başvuru sayısı");
+      if (!data.publishedAt || Number.isNaN(new Date(data.publishedAt).getTime())) missing.push("yayın tarihi");
+    }
+    return { score: null, label: "Veri yetersiz", copy: `Hareketlilik puanı hesaplanamıyor: ${missing.join(", ") || "ilan verileri"} eksik veya okunamadı.`, color: "#64748b" };
   }
   // PublishedAt is the primary signal. Review recency only supports the estimate;
   // a recent review cannot make an old, high-volume listing look highly active.
@@ -91,17 +98,17 @@ export function getHiringActivity(data: Job, insight: ApplicationInsight | null)
   if (likelyPoolListing) {
     return {
       score: Math.min(score, 34),
-      label: "Çok düşük devir",
+      label: "Çok düşük hareketlilik",
       color: "#dc2626",
       copy: withCompetitionWarning("Alım sinyali çok zayıf. İlanın aday havuzu toplama olasılığı yüksek; başvurmadan önce dikkatli değerlendirin."),
     };
   }
   return score <= 34
-    ? { score, label: "Çok düşük devir", color: "#dc2626", copy: withCompetitionWarning(reviewIsStale ? reviewFollowUpCopy : "Alım sinyali çok zayıf. İlanın aday havuzu toplama olasılığı yüksek; başvurmadan önce dikkatli değerlendirin.") }
+    ? { score, label: "Çok düşük hareketlilik", color: "#dc2626", copy: withCompetitionWarning(reviewIsStale ? reviewFollowUpCopy : "Alım sinyali çok zayıf. İlanın aday havuzu toplama olasılığı yüksek; başvurmadan önce dikkatli değerlendirin.") }
     : score < 50
-      ? { score, label: "Düşük devir", color: "#f59e0b", copy: withCompetitionWarning(reviewIsStale ? reviewFollowUpCopy : "Alım hareketliliği düşük görünüyor; süreç yavaş ilerliyor olabilir.") }
+      ? { score, label: "Düşük hareketlilik", color: "#f59e0b", copy: withCompetitionWarning(reviewIsStale ? reviewFollowUpCopy : "Alım hareketliliği düşük görünüyor; süreç yavaş ilerliyor olabilir.") }
       : score < 65
-        ? { score, label: "Orta devir", color: "#8b5cf6", copy: withCompetitionWarning("Başvurular aralıklı inceleniyor; alım süreci yavaş ilerliyor olabilir.") }
-        : { score, label: "Yüksek devir", color: "#10b981", copy: withCompetitionWarning("Başvurular yakın zamanda incelenmiş. Alım süreci hareketli görünüyor.") };
+        ? { score, label: "Orta hareketlilik", color: "#8b5cf6", copy: withCompetitionWarning("Başvurular aralıklı inceleniyor; alım süreci yavaş ilerliyor olabilir.") }
+        : { score, label: "Yüksek hareketlilik", color: "#10b981", copy: withCompetitionWarning("Başvurular yakın zamanda incelenmiş. Alım süreci hareketli görünüyor.") };
 }
 
