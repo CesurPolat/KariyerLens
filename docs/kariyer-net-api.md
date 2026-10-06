@@ -1012,6 +1012,16 @@ Başlıklar paylaşılmadı; kimlik doğrulama ve cookie gereksinimleri bilinmiy
 | `workExperience.type` | Sayı; örnekte `1`; deneyim filtresi kodunun anlamı bilinmiyor. Kaydedilmiş arama yanıtında görülen string `All` ile aynı türde değildir. |
 | `location.cities`, `location.districts` | String dizisi; şehir ve ilçe seçenek kimlikleri; özel konum seçeneklerinin anlamları doğrulanmadı |
 
+#### İstanbul konum kodları
+
+Kullanıcının konum seçeneklerine ilişkin açıklaması:
+
+| `location.cities` kodu | Anlam / doğrulama durumu |
+| --- | --- |
+| `34` | İstanbul Avrupa yakası; önceki arama yanıtında `İstanbul(Avr.)` etiketiyle de gözlendi |
+| `82` | İstanbul Asya yakası; önceki arama yanıtında `İstanbul(Asya)` etiketiyle de gözlendi |
+| `998` | Tüm İstanbul; kullanıcının açıklamasıyla netleştirildi |
+
 Alan adları ve türleri bu istek gövdesinde gözlenmiştir. Kod/ad eşleştirmeleri için yanıtın `filters` seçenekleri kullanılabilir; eşleştirme görülmeden kod anlamı tahmin edilmemelidir. Aynı filtre içindeki seçeneklerin ve farklı filtrelerin AND/OR birleşme kuralları, boş dizi ile alanın gönderilmemesi arasındaki fark ve tüm seçeneklerin seçilmesinin filtreyi kaldırıp kaldırmadığı doğrulanmadı.
 
 ### Anonimleştirilmiş ve kısaltılmış yanıt örneği
@@ -1102,6 +1112,56 @@ Alan açıklamaları paylaşılan örnek ve alan adlarından yorumlanmıştır; 
 
 Yanıt `data.jobs.items` üzerinden ayrıştırılmalıdır; mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Arama eşleşme kuralları, sayfalama garantileri, başlıksız/oturumsuz erişim, başarısız/boş yanıtlar, HTTP durumları ve rate-limit davranışı doğrulanmadı.
 
+## İlgili aramalar — `POST /Search/relatedsearch`
+
+**Kaynak:** Kullanıcının paylaştığı URL, POST yöntemi, istek gövdesi ve JSON yanıtı. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi.
+
+**Adres:** `https://candidatesearchapigateway.kariyer.net/Search/relatedsearch`
+
+URL'deki büyük/küçük harfler paylaşılan örnekle aynıdır. Başlıklar paylaşılmadı; kimlik doğrulama ve cookie gereksinimleri bilinmiyor.
+
+### İstek gövdesi
+
+```json
+{"keyword":"yazılım"}
+```
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `keyword` | String; ilgili aramaların istendiği arama metni. Zorunluluğu ve uzunluk sınırları doğrulanmadı. |
+
+### Paylaşılan yanıt örneği
+
+Örnek kişisel bilgi veya ilan/aday kimliği içermediğinden paylaşılan değerler korunmuştur.
+
+```json
+{
+  "statusCode": "Success",
+  "status": "Success",
+  "data": {
+    "relatedSearch": [
+      "bilgisayar mühendisi",
+      "asp.net",
+      "it",
+      "yazılım destek",
+      "junior software developer"
+    ]
+  },
+  "message": null,
+  "error": null
+}
+```
+
+### Yanıtta gözlenen alanlar
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `statusCode`, `status` | String; her ikisi de `Success` |
+| `data.relatedSearch` | String dizisi; ilgili arama ifadeleri, örnekte beş sonuç |
+| `message`, `error` | Örnekte null; hata durumundaki türleri bilinmiyor |
+
+Sonuçlar şirket/pozisyon kimliği veya ilan sayısı içermiyor. Öneri algoritması, sıralama kuralları ve sonuç sayısının her zaman beş olup olmadığı doğrulanmadı. Alanların zorunluluğu, boş/başarısız yanıtlar, HTTP durum kodları ve rate-limit davranışı bilinmiyor. Yanıt mevcut `/job` ayrıştırıcısıyla uyumlu değildir.
+
 ## Şirket sayıları için mevcut veri kaynakları
 
 Uzantının çalışma kodunda bu sayılar için henüz bir JSON endpoint'i kullanılmıyor. Kullanıcının açıklamasına göre `/Search/company` yanıtındaki `data[].occurrence` şirketin açık ilan sayısını verir; bu kaynak henüz çalışma koduna entegre edilmedi.
@@ -1126,5 +1186,6 @@ Profil HTML isteği aynı kaynak üzerinden yapılır. Bu bölüm sayfa entegras
 - `/Search/company` için HTTP yöntemi, kimlik doğrulama ve sonuç sınırı/sayfalama davranışı.
 - `POST /Search/autocomplete` için başlıklar, özgün `keyword` değeri, `occurrence` anlamları ve sonuç sınırları.
 - `GET /jb/api/search/autocomplete` için başlıklar, `type`/`count` anlamları, kategori ve sonuç sınırları.
+- `POST /Search/relatedsearch` için başlıklar, sonuç sınırları ve boş/başarısız yanıtlar.
 
 Yeni kayıtlar gerçek istekte görülen URL ve alanlarla eklenecek; endpoint adları tahmin edilerek yazılmayacak. Paylaşılan örneklerden Cookie, Authorization, token ve kişisel veriler çıkarılmalıdır.
