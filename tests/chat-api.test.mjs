@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chatWithJob, validateMessages, plainText, buildContext, CHAT_TIMEOUT_MS, CHAT_MAX_TOOL_CALLS } from "../src/background/chat-api.ts";
+import { chatWithJob, validateMessages, plainText, buildContext, CHAT_TIMEOUT_MS } from "../src/background/chat-api.ts";
 import { KARIYER_TOOLS } from "../src/background/kariyer-tools.ts";
 const history = [{ role: "user", content: "İlanı özetle" }];
 const settings = (provider = "openai") => ({ provider, providers: { [provider]: { apiKey: "test-key", model: "test-model" } } });
@@ -143,40 +143,32 @@ test("tool failures are data and request tools have no persistent memory", async
   }
 });
 
-test("exceeding the tool budget stops execution before another model request", async () => {
-  let calls = 0, companyCalls = 0;
-  const result = await chatWithJob(job, history, settings(), async () => toolReply("get_current_company_stats", "tool-" + ++calls), {
-    loadJob: async () => ({ ok: true, data: job, fetchedAt: 0 }),
-    loadCompany: async () => { companyCalls++; return { ok: true, data: company }; },
-  });
-  assert.equal(result.code, "TOOL_LIMIT"); assert.equal(companyCalls, CHAT_MAX_TOOL_CALLS); assert.equal(calls, CHAT_MAX_TOOL_CALLS + 1);
-});
-
-test("parallel tool calls share the execution budget", async () => {
+test("parallel tool calls can exceed the former eight-call limit", async () => {
   let calls = 0, companyCalls = 0;
   const result = await chatWithJob(job, history, settings(), async () => {
     calls++;
+    if (calls > 1) return textReply();
     return Response.json({ choices: [{ index: 0, message: { role: "assistant", content: null,
-      tool_calls: Array.from({ length: CHAT_MAX_TOOL_CALLS + 2 }, (_, i) => ({ id: "call-" + i, type: "function", function: { name: "get_current_company_stats", arguments: "{}" } })),
+      tool_calls: Array.from({ length: 12 }, (_, i) => ({ id: "call-" + i, type: "function", function: { name: "get_current_company_stats", arguments: "{}" } })),
     }, finish_reason: "tool_calls" }] });
   }, { loadJob: async () => ({ ok: true, data: job, fetchedAt: 0 }),
     loadCompany: async () => { companyCalls++; return { ok: true, data: company }; } });
-  assert.equal(result.code, "TOOL_LIMIT"); assert.equal(companyCalls, CHAT_MAX_TOOL_CALLS); assert.equal(calls, 1);
+  assert.deepEqual(result, { ok: true, reply: "Veriler alındı." }); assert.equal(companyCalls, 12); assert.equal(calls, 2);
 });
 
-test("the full sequential tool budget leaves room for the final model answer", async () => {
+test("sequential tools can exceed the former call and graph step limits", async () => {
   let modelCalls = 0, toolCalls = 0;
   const result = await chatWithJob(job, history, settings(), async () => {
     modelCalls++;
-    return modelCalls <= CHAT_MAX_TOOL_CALLS
+    return modelCalls <= 40
       ? toolReply("get_current_company_stats", "round-" + modelCalls) : textReply("Analiz tamamlandı.");
   }, {
     loadJob: async () => ({ ok: true, data: job, fetchedAt: 0 }),
     loadCompany: async () => { toolCalls++; return { ok: true, data: company }; },
   });
   assert.deepEqual(result, { ok: true, reply: "Analiz tamamlandı." });
-  assert.equal(toolCalls, CHAT_MAX_TOOL_CALLS);
-  assert.equal(modelCalls, CHAT_MAX_TOOL_CALLS + 1);
+  assert.equal(toolCalls, 40);
+  assert.equal(modelCalls, 41);
 });
 
 test("unsupported tool model errors do not leak provider bodies", async () => {

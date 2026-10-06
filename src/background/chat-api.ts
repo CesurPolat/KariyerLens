@@ -10,9 +10,10 @@ import type { KariyerToolResult } from "./kariyer-tools.js";
 export const CHAT_STREAMING_ENABLED = true;
 export const CHAT_TIMEOUT_MS = 120_000;
 export const CHAT_TOTAL_TIMEOUT_MS = 600_000;
-export const CHAT_MAX_TOOL_CALLS = 8;
-// Allow model, tool and middleware steps for each sequential tool round and the final reply.
-const CHAT_RECURSION_LIMIT = 64;
+// Infinity: sınırsız; sayı verilirse sohbet başına tool çağrısı sınırı uygulanır.
+export const CHAT_MAX_TOOL_CALLS = Infinity;
+// Tool rounds are bounded by cancellation and deadlines, not a step count.
+const CHAT_RECURSION_LIMIT = Infinity;
 
 const ENDPOINTS = Object.freeze({
   openai: "https://api.openai.com/v1/chat/completions",
@@ -198,7 +199,6 @@ export async function chatWithJob(job: Partial<Job>, messages: unknown, settings
     if (timeoutReason === "total") return fail("TIMEOUT", `Yanıtın toplam süresi ${CHAT_TOTAL_TIMEOUT_MS / 60_000} dakikayı aştı. Yeniden deneyebilirsiniz.`);
     if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) return fail("TIMEOUT", `${CHAT_TIMEOUT_MS / 1000} saniyedir yeni yanıt veya işlem sonucu alınamadı. Yeniden deneyebilirsiniz.`);
     if (limitExceeded) return fail("TOOL_LIMIT", `Bu yanıt için ${CHAT_MAX_TOOL_CALLS} araç çağrısı sınırına ulaşıldı. İsteği birkaç adıma bölerek yeniden deneyin.`);
-    if (error instanceof Error && error.name === "GraphRecursionError") return fail("TOOL_LIMIT", "Asistan işlem adımı sınırına ulaştı. İsteği birkaç adıma bölerek yeniden deneyin.");
     const status = error && typeof error === "object" && "status" in error ? error.status : undefined;
     if (status === 401 || status === 403) return fail("AUTH_ERROR", "API anahtarı geçersiz veya bu modele erişiminiz yok.");
     if (status === 402 || status === 429) return fail("QUOTA_ERROR", "Kota, bakiye veya istek sınırına ulaşıldı. Sağlayıcı hesabınızı kontrol edin.");
