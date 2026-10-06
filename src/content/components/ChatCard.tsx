@@ -1,12 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useJobChat } from "./use-job-chat.js";
 import { MarkdownMessage } from "./MarkdownMessage.js";
+import { useChatResize } from "./use-chat-resize.js";
 import styles from "./chat.css?inline";
 
 const suggestions = ["İlanı özetle", "Aranan yetkinlikler neler?", "Mülakata nasıl hazırlanabilirim?"];
 
 export function ChatCard({ jobId }: { jobId: string }) {
   const { messages, pending, status, input, submit, clear, openSettings } = useJobChat(jobId);
+  const { panel, size, resizeHandle } = useChatResize();
   const list = useRef<HTMLDivElement>(null);
   const followBottom = useRef(true);
   const launcher = useRef<HTMLButtonElement>(null);
@@ -33,7 +35,13 @@ export function ChatCard({ jobId }: { jobId: string }) {
 
   return <>
     <style>{styles}</style>
-    <section id="chat-panel" role="dialog" aria-label="KariyerLens Asistan" hidden={!open}>
+    <section id="chat-panel" ref={panel} style={size} role="dialog" aria-label="KariyerLens Asistan" hidden={!open}>
+      <button id="resize-chat" type="button" aria-label="Sohbeti boyutlandır" aria-controls="chat-panel"
+        title="Boyutlandırmak için sürükle veya ok tuşlarını kullan" {...resizeHandle}>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M3 10V3h7M3 3l10 10" />
+        </svg>
+      </button>
       <header><div><h2>✦ KariyerLens Asistan</h2><p>Bu ilan hakkında sorular sor, başvuruna hazırlan.</p></div>
         <button id="close-chat" ref={closeButton} type="button" aria-label="Sohbeti kapat" onClick={close}>×</button></header>
       <nav><button id="clear" type="button" onClick={() => clear()}>Sohbeti temizle</button>
