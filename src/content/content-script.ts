@@ -4,7 +4,6 @@ interface ApplicationInsight { applicationsPerDay: number; openDays: number }
 
 const GET_JOB = "GET_JOB";
 const APPLICATION_COUNT_SELECTOR = '[data-test="job-application-count"]';
-const APPLICATION_REVIEW_SELECTOR = '[data-test="job-application-view-day"]';
 const JOB_FEATURE_LIST_SELECTOR = '[data-test="job-feature-list"]';
 const JOB_DATE_INFO_SELECTOR = '[data-kariyer-lens-date-info="true"]';
 const JOB_DETAIL_MAIN_SELECTOR = ".job-detail-body-main";
@@ -267,9 +266,9 @@ function updateNativeDateInfo(data: Job) {
     `Yay: ${formatPublishedAt(data.publishedAt)}`,
     `Bit: ${shortDate(data.closingDate)}`,
     ...(jobDateText ? [jobDateText] : []),
-    `v${data.updateCount || "â€”"}`,
+    `v${data.updateCount || "—"}`,
+    ...(data.applicationReviewText ? [data.applicationReviewText] : []),
   ];
-  if (!data.updateCount) details[details.length - 1] = `v${String.fromCharCode(8212)}`;
   const heading = document.createElement("div");
   Object.assign(heading.style, {
     display: "block",
@@ -360,7 +359,9 @@ function updateNativeDateInfo(data: Job) {
       fontSize: "13px",
       fontWeight: "700",
       lineHeight: "18px",
-      whiteSpace: "nowrap",
+      maxWidth: "100%",
+      whiteSpace: "normal",
+      overflowWrap: "anywhere",
     });
     detailList.append(detailElement);
   });
@@ -371,52 +372,6 @@ function syncNativeDateInfo(data: Job) {
   if (updateNativeDateInfo(data)) return;
   const observer = new MutationObserver(() => {
     if (updateNativeDateInfo(data)) observer.disconnect();
-  });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-  setTimeout(() => observer.disconnect(), NATIVE_SYNC_TIMEOUT_MS);
-}
-
-function updateNativeApplicationReviewInfo(applicationReviewText?: string) {
-  if (!applicationReviewText) return false;
-  const mainContainer = document.querySelector<HTMLElement>(
-    `${JOB_DETAIL_MAIN_SELECTOR} .job-detail-ad-headline .main-container`,
-  );
-  if (!mainContainer) return false;
-
-  document
-    .querySelectorAll(`${APPLICATION_REVIEW_SELECTOR}[data-kariyer-lens-updated="true"]`)
-    .forEach((element) => {
-      if (!mainContainer.contains(element)) element.remove();
-    });
-
-  let reviewElement = mainContainer.querySelector<HTMLElement>(APPLICATION_REVIEW_SELECTOR);
-  if (!reviewElement) {
-    reviewElement = document.createElement("div");
-    reviewElement.className = "job-application-view-day";
-    reviewElement.dataset.test = "job-application-view-day";
-    reviewElement.dataset.kariyerLensCreated = "true";
-    Object.assign(reviewElement.style, {
-      fontSize: "14px",
-      fontWeight: "500",
-      lineHeight: "20px",
-      marginBottom: "16px",
-    });
-    const jobFeatures = mainContainer.querySelector<HTMLElement>(".job-features");
-    if (jobFeatures) {
-      jobFeatures.insertAdjacentElement("afterend", reviewElement);
-    } else {
-      mainContainer.append(reviewElement);
-    }
-  }
-  reviewElement.textContent = applicationReviewText;
-  reviewElement.dataset.kariyerLensUpdated = "true";
-  return true;
-}
-
-function syncNativeApplicationReviewInfo(applicationReviewText?: string) {
-  if (updateNativeApplicationReviewInfo(applicationReviewText)) return;
-  const observer = new MutationObserver(() => {
-    if (updateNativeApplicationReviewInfo(applicationReviewText)) observer.disconnect();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
   setTimeout(() => observer.disconnect(), NATIVE_SYNC_TIMEOUT_MS);
@@ -465,7 +420,6 @@ async function loadCurrentJob() {
     if (response?.ok && findJobId() === jobId) {
       syncNativeApplicationCount(response.data.applicationCount);
       syncNativeDateInfo(response.data);
-      syncNativeApplicationReviewInfo(response.data.applicationReviewText);
       syncNativePositionFeature(response.data.position);
     }
   } catch {
