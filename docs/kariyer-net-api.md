@@ -1509,6 +1509,126 @@ Alan açıklamaları paylaşılan örnek ve alan adlarından yorumlanmıştır; 
 
 Şirket kayıtları `/Search/company` yanıtına benzer; burada `id` null olduğundan kimlik için `companyId`/`profileId` alanları değerlendirilmelidir. Paylaşılan yanıtta toplam sayı veya sayfalama metadatası bulunmuyor; altı kayıt dönmesi tüm kayıtların tek istekte döneceğini garanti etmez. Yanıt mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Boş/başarısız yanıtlar, HTTP durumları ve rate-limit davranışı bilinmiyor.
 
+## Belge türleri — endpoint bilgisi bekleniyor
+
+**Kaynak:** Kullanıcının paylaştığı JSON yanıtı. Alan değerleri belge türleri listesine işaret ediyor; URL, HTTP yöntemi ve kimlik doğrulama bilgileri henüz paylaşılmadı. Endpoint adı tahmin edilmemiştir. Canlı istek yapılmadı; çalışma koduna entegrasyon yoktur.
+
+### Paylaşılan yanıt örneği
+
+Kimlikler belge türü seçenek kodlarıdır; kişisel bilgi içermediğinden değerler korunmuştur.
+
+```json
+{
+  "version": "1.0",
+  "statusCode": 200,
+  "result": [
+    {"id": 1, "name": "Özgeçmiş"},
+    {"id": 2, "name": "Eğitim Belgesi"},
+    {"id": 3, "name": "Sunum"},
+    {"id": 4, "name": "Proje/Çalışma"},
+    {"id": 5, "name": "Başarı/Onur Belgesi"},
+    {"id": 6, "name": "Makale"},
+    {"id": 9, "name": "Portfolyo"},
+    {"id": 7, "name": "Diğer"}
+  ]
+}
+```
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `version` | String; örnekte `1.0` |
+| `statusCode` | Sayı; gövdede `200`; HTTP durum kodu ayrıca paylaşılmadı |
+| `result` | Dizi; sekiz belge türü seçeneği |
+| `result[].id` | Sayı; belge türü kodu |
+| `result[].name` | String; belge türü etiketi |
+
+`8` kodu paylaşılan listede bulunmuyor; eksik kodlar veya ek türler varsayılmamalıdır. Bu liste dosya yükleme yöntemi, kabul edilen uzantılar veya boyut sınırları hakkında bilgi vermiyor. Alan zorunlulukları ve boş/başarısız yanıtlar bilinmiyor.
+
+## Aday dosya listesi — `GET /jb/api/common/get-file-list`
+
+**Kaynak:** Kullanıcının paylaştığı URL, GET yöntemi, Bearer token bilgisi ve JSON yanıtı. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi. Bu yanıt yüklenmiş dosyaları listeler; önceki belge türleri seçenek listesinden farklıdır.
+
+```http
+GET https://candidatewebapigw.kariyer.net/jb/api/common/get-file-list
+Authorization: Bearer <TOKEN>
+```
+
+Paylaşılan URL'de query parametresi yoktur. İstek gövdesi paylaşılmadı; ek başlıklar ve cookie gereksinimi doğrulanmadı.
+
+### Anonimleştirilmiş yanıt örneği
+
+Dosya/aday kimlikleri, dosya adı, tarihler, imzalı dosya bağlantısı ve ayrıştırılmış CV kimliği değiştirilmiştir. Sayısal kimlikler yer tutucu için string gösterilir. `fileType` bir seçenek kodudur; korunmuştur.
+
+```json
+{
+  "version": "1.0",
+  "statusCode": 200,
+  "result": [{
+    "id": "<FILE_ID>",
+    "candidateId": "<CANDIDATE_ID>",
+    "name": "Ornek_CV.pdf",
+    "fileSize": 65012.0,
+    "fileType": 1,
+    "fileTypeName": "Özgeçmiş",
+    "relatedCvs": [],
+    "creationDate": "2024-01-01T12:00:00.307",
+    "lastModifyDate": "2024-01-01T12:00:15.203",
+    "path": "<REDACTED_SIGNED_FILE_URL>",
+    "parsedCv": "<REDACTED>"
+  }]
+}
+```
+
+### Yanıtta gözlenen alanlar
+
+Alan açıklamaları paylaşılan örnek ve alan adlarından yorumlanmıştır; zorunlulukları doğrulanmadı.
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `version`, `statusCode` | String / sayı; örnekte `1.0` ve `200`; HTTP durum kodu ayrıca paylaşılmadı |
+| `result` | Dizi; adayın yüklenmiş dosyaları, örnekte bir kayıt |
+| `result[].id`, `.candidateId` | Sayı; dosya ve aday kimlikleri |
+| `result[].name` | String; uzantıyı içeren dosya adı |
+| `result[].fileSize` | Sayı; dosya boyutu, örnekte `65012.0`; birimi doğrulanmadı |
+| `result[].fileType`, `.fileTypeName` | Sayı / string; dosya türü kodu ve etiketi; örnekte `1` = `Özgeçmiş`, önceki belge türleri listesiyle eşleşiyor |
+| `result[].relatedCvs` | Dizi; ilişkili CV'ler olarak yorumlandı; örnekte boş, eleman yapısı bilinmiyor |
+| `result[].creationDate`, `.lastModifyDate` | String; oluşturulma ve son değişiklik tarihleri, kesirli saniye içeriyor; saat dilimi belirtilmemiş |
+| `result[].path` | String; `filesec` query değeri içeren imzalı/korumalı dosya bağlantısı olarak yorumlandı; geçerlilik süresi bilinmiyor |
+| `result[].parsedCv` | String; kodlanmış/şifrelenmiş ayrıştırılmış CV referansı olarak yorumlandı; kesin kullanım amacı doğrulanmadı |
+
+Yanıt `result` dizisi üzerinden ayrıştırılmalıdır; mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Dosya yükleme/silme işlemleri, indirme erişim koşulları, sonuç sınırları, boş/başarısız yanıtlar, HTTP durumları ve rate-limit davranışı bu örnekten doğrulanmadı. Önceki belge türleri listesinin URL'si hâlâ paylaşılmamıştır.
+
+## Kısıtlanan şirketler — `GET /Search/my-ambargoed-companies`
+
+**Kaynak:** Kullanıcının paylaştığı URL, GET yöntemi, Bearer token bilgisi ve JSON yanıtı. Endpoint adı kısıtlanan/engellenen şirketler listesine işaret ediyor; kesin ürün anlamı doğrulanmadı. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi. `ambargoed` yazımı paylaşılan URL ile aynıdır.
+
+```http
+GET https://candidatesearchapigateway.kariyer.net/Search/my-ambargoed-companies
+Authorization: Bearer <TOKEN>
+```
+
+Paylaşılan URL'de query parametresi yoktur. İstek gövdesi paylaşılmadı; ek başlıklar ve cookie gereksinimi doğrulanmadı.
+
+### Paylaşılan yanıt örneği
+
+```json
+{
+  "statusCode": "Success",
+  "status": "Success",
+  "data": [],
+  "message": null,
+  "error": null
+}
+```
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `statusCode`, `status` | String; her ikisi de `Success` |
+| `data` | Dizi; örnekte boş, eleman yapısı bilinmiyor |
+| `message`, `error` | Örnekte null; hata durumundaki türleri bilinmiyor |
+
+Bu örnekte başarılı yanıt boş liste içeriyor; boş liste tek başına hata olarak değerlendirilmemelidir. Dolu kayıtların `/Search/my-followed-companies` veya `/Search/company` yapısıyla aynı olduğu varsayılmamalıdır. Kısıtlamanın ilan görünürlüğüne/başvuruya etkisi, sonuç sınırları, başarısız yanıtlar, HTTP durumları ve rate-limit davranışı bilinmiyor. Yanıt mevcut `/job` ayrıştırıcısıyla uyumlu değildir.
+
 ## Şirket sayıları için mevcut veri kaynakları
 
 Uzantının çalışma kodunda bu sayılar için henüz bir JSON endpoint'i kullanılmıyor. Kullanıcının açıklamasına göre `/Search/company` yanıtındaki `data[].occurrence` şirketin açık ilan sayısını verir; bu kaynak henüz çalışma koduna entegre edilmedi.
@@ -1538,5 +1658,8 @@ Profil HTML isteği aynı kaynak üzerinden yapılır. Bu bölüm sayfa entegras
 - `GET /jb/api/candidates/resumes/view` için sayfalama kapsamı, görüntülenme gruplama kuralları ve boş/başarısız yanıtlar.
 - `GET /coverletters` için sayfalama, içerik kısaltma davranışı, tam metin kaynağı ve boş/başarısız yanıtlar.
 - `GET /Search/my-followed-companies` için sonuç sınırları, `occurrence` anlamı ve boş/başarısız yanıtlar.
+- Belge türleri yanıtının URL'si, HTTP yöntemi ve kimlik doğrulama gereksinimleri.
+- `GET /jb/api/common/get-file-list` için dosya boyutu birimi, ilişkili CV yapısı, indirme erişimi ve boş/başarısız yanıtlar.
+- `GET /Search/my-ambargoed-companies` için dolu kayıt yapısı, kısıtlama anlamı ve başarısız yanıtlar.
 
 Yeni kayıtlar gerçek istekte görülen URL ve alanlarla eklenecek; endpoint adları tahmin edilerek yazılmayacak. Paylaşılan örneklerden Cookie, Authorization, token ve kişisel veriler çıkarılmalıdır.
