@@ -4,6 +4,10 @@ import type { ChatStreamOptions } from "./chat-api.js";
 import { MESSAGE_TYPES } from "../shared/messages.js";
 import type { ChatSettings, CompanyStatsResult, ExtensionMessage, JobResult, JobSuccess } from "../shared/types.js";
 import { z } from "zod";
+import { callKariyerTool, KARIYER_TOOLS } from "./kariyer-tools.js";
+import { getKariyerCredentials, observeKariyerSession } from "./kariyer-session.js";
+
+observeKariyerSession();
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const cache = new Map<string, JobSuccess>();
@@ -64,6 +68,10 @@ async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.M
   const { chatSettings } = await chrome.storage.local.get<{ chatSettings?: ChatSettings }>("chatSettings");
   return chatWithJob({}, message.messages, chatSettings, fetch, {
     loadJob: () => loadJob(jobId), loadCompany: () => loadCompany(jobId, sender),
+    callKariyerTool: (name, input, signal) => {
+      const endpoint = KARIYER_TOOLS.find(item => item.name === name);
+      return callKariyerTool(name, input, jobId, endpoint ? getKariyerCredentials(endpoint.origin) : {}, fetch, signal);
+    },
   }, streaming);
 }
 

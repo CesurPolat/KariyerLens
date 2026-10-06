@@ -10,8 +10,8 @@
     "48": "assets/icons/icon-48.png",
     "128": "assets/icons/icon-128.png"
   },
-  "permissions": ["storage"],
-  "host_permissions": ["https://candidatesearchapigateway.kariyer.net/*", "https://api.openai.com/*", "https://openrouter.ai/*", "https://llm.cesurpolat.dev/*"],
+  "permissions": ["storage", "webRequest"],
+  "host_permissions": ["https://*.kariyer.net/*", "https://api.openai.com/*", "https://openrouter.ai/*", "https://llm.cesurpolat.dev/*"],
   "options_ui": { "page": "src/options/options.html", "open_in_tab": true },
   "background": {
     "service_worker": "src/background/service-worker.js",

@@ -4,6 +4,37 @@ Bu doküman KariyerLens entegrasyonundan ve birlikte inceleyeceğimiz isteklerde
 
 Her yeni endpoint için yöntem, adres, parametreler, oturum gereksinimi, anonimleştirilmiş yanıt örneği, alan açıklamaları ve gözlenen hatalar kaydedilecek. Doğrulanmayan noktalar açıkça belirtilecek.
 
+## KariyerLens sohbet araçları
+
+Bu dokümandaki URL'si bilinen 18 ek endpoint `src/background/kariyer-tools.ts` üzerinden sohbet ajanına bağlandı. Mevcut `get_current_job` ve `get_current_company_stats` ile toplam 20 tool sunulur. Aşağıdaki endpoint kayıtlarında geçen “henüz entegre edilmedi” ifadeleri kayıtların oluşturulduğu tarihe aittir; güncel kod durumu bu bölümdedir. Canlı API uyumluluğu bu entegrasyon sırasında doğrulanmadı.
+
+| Tool | Endpoint |
+| --- | --- |
+| `get_candidate_base_info` | `/candidates/base-info` |
+| `get_candidate_profile_summary` | `/jb/api/candidates/getcandidateinformationforcookie` |
+| `get_saved_searches` | `/search/savedsearches` |
+| `get_current_job_apply_status` | `/candidates/job_apply_status` |
+| `get_job_recommendations` | `POST /Job/job-detail-recommendations` |
+| `get_salary_by_position` | `/candidates/get-salary-by-position` |
+| `get_current_job_application_detail` | `/get-job-application-detail` |
+| `search_companies` | `/Search/company` |
+| `autocomplete_search` | `POST /Search/autocomplete` |
+| `get_search_suggestions` | `GET /jb/api/search/autocomplete` |
+| `search_jobs` | `POST /search` |
+| `get_related_searches` | `POST /Search/relatedsearch` |
+| `get_resumes` | `/jb/api/candidates/resumes` |
+| `get_resume_views` | `GET /jb/api/candidates/resumes/view` |
+| `get_cover_letters` | `GET /coverletters` |
+| `get_followed_companies` | `GET /Search/my-followed-companies` |
+| `get_candidate_files` | `GET /jb/api/common/get-file-list` |
+| `get_restricted_companies` | `GET /Search/my-ambargoed-companies` |
+
+Yöntemi paylaşılmamış endpointlerde GET varsayılır; tool açıklaması ve `methodAssumed` sonucu bunu belirtir. URL'si bilinmeyen belge türleri listesi eklenmedi. Parametre sınırları uzantının yerel sınırlarıdır; API'nin kabul ettiği sınırlar olarak yorumlanmamalıdır. Açık ilana bağlı araçlar ilan kimliğini service worker'dan alır. Tool'lar başvuru yapmaz, kayıt veya tercih değiştirmez. İlan araması `dontAddLog: true` gönderir; bu bayrağın sunucu davranışı ayrıca doğrulanmalıdır.
+
+`webRequest` ve Kariyer.net host izni, sitenin kendi isteklerinde gönderdiği Bearer ve maaş `ApiKey` başlıklarını gözlemlemek için kullanılır. Yalnız Kariyer.net kaynaklı sekme istekleri izlenir. Başlıklar hedef API origin'i bazında worker belleğinde tutulur; 30 dakika yeni kimlik doğrulama başlığı gözlenmezse veya worker kapanırsa yeniden yakalanmaları gerekir. Diske veya model sağlayıcısına yazılmazlar. Uzantıyı yeniden yükledikten sonra Kariyer.net oturumunu açıp ilgili profil/ilan/maaş sayfasını yenilemek gerekir. Başlık yoksa kimlik doğrulama gerektiren tool `AUTH_REQUIRED` döndürür. Token yenileme veya erişim korumasını aşma uygulanmaz.
+
+Başarı sarmalayıcıları (`data`, `result`, `header/body`, doğrudan JSON) ayrıştırılır. Oturum alanları ve şifrelenmiş kimlikler model çıktısından çıkarılır, URL query/hash bölümleri kaldırılır. Yanıtlar derinlik, alan, dizi ve metin bütçesiyle sınırlandırılır; eksilen veri için `truncated` döner. Kişisel profil, CV, ön yazı ve başvuru bilgileri kullanıcı bunları sorduğunda alınır ve sohbet için seçili model sağlayıcısına tool sonucu olarak gönderilir. CV listesi tam özgeçmiş içeriği değildir. Her sohbet isteğinin mevcut üç tool çağrısı ve 25 saniyelik toplam süresi korunur.
+
 ## İlan detayı — `GET /job`
 
 **Kaynak:** `src/background/kariyer-api.ts` içindeki mevcut entegrasyon.
