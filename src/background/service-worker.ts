@@ -1,5 +1,6 @@
 import { getJob, validateJobId } from "./kariyer-api.js";
 import { chatWithJob, validateMessages } from "./chat-api.js";
+import type { ChatStreamOptions } from "./chat-api.js";
 import { MESSAGE_TYPES } from "../shared/messages.js";
 import type { ChatSettings, CompanyStatsResult, ExtensionMessage, JobResult, JobSuccess } from "../shared/types.js";
 import { z } from "zod";
@@ -50,7 +51,7 @@ async function loadCompany(jobId: string, sender: chrome.runtime.MessageSender):
   } catch { return unavailable; }
 }
 
-async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.MessageSender) {
+async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.MessageSender, streaming?: ChatStreamOptions) {
   if (message.type === MESSAGE_TYPES.OPEN_OPTIONS) {
     await chrome.runtime.openOptionsPage();
     return { ok: true };
@@ -63,7 +64,7 @@ async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.M
   const { chatSettings } = await chrome.storage.local.get<{ chatSettings?: ChatSettings }>("chatSettings");
   return chatWithJob({}, message.messages, chatSettings, fetch, {
     loadJob: () => loadJob(jobId), loadCompany: () => loadCompany(jobId, sender),
-  });
+  }, streaming);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -71,6 +72,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender.tab && !/^https:\/\/(?:[\w-]+\.)*kariyer\.net\//i.test(sender.url || "")) return;
   handleMessage(message, sender).then(sendResponse).catch(() => sendResponse({ ok: false, code: "INTERNAL_ERROR", message: "İstek tamamlanamadı. Uzantıyı yeniden yükleyip deneyin." }));
   return true;
+});
+
+chrome.runtime.onConnect.addListener((port) => {
+  const sender = port.sender;
+  if (port.name !== MESSAGE_TYPES.CHAT_STREAM || sender?.id !== chrome.runtime.id || !sender.tab
+    || !/^https:\/\/(?:[\w-]+\.)*kariyer\.net\//i.test(sender.url || "")) { port.disconnect(); return; }
+  const controller = new AbortController();
+  let started = false;
+  let closed = false;
+  port.onDisconnect.addListener(() => { closed = true; controller.abort(); });
+  const post = (event: unknown) => {
+    if (closed) return;
+    try { port.postMessage(event); } catch { closed = true; controller.abort(); }
+  };
+  port.onMessage.addListener((message) => {
+    if (started || message?.type !== MESSAGE_TYPES.CHAT_JOB) return;
+    started = true;
+    handleMessage(message, sender, { signal: controller.signal, onProgress: post })
+      .then((result) => post({ type: "done", result }))
+      .catch(() => post({ type: "done", result: { ok: false, code: "INTERNAL_ERROR", message: "İstek tamamlanamadı. Yeniden deneyin." } }));
+  });
 });
 
 chrome.action.onClicked.addListener(() => { chrome.runtime.openOptionsPage().catch(() => {}); });

@@ -61,7 +61,9 @@ Her sağlayıcının anahtarı ve modeli ayrı saklanır. Anahtarı ayarlardaki 
 
 Asistan soruya göre iki parametresiz araç kullanabilir: `get_current_job` açık ilanın detaylarını ve başvuru verilerini, `get_current_company_stats` ise açık ilanın şirket adı, profil adresi, takipçi bilgisi, açık ilan sayısı ve ilan listesi adresini getirir. Şirket kaynağı bir JSON API değil, mevcut aynı kaynaklı profil sayfasıdır. Gösterge ve araç aynı beş dakikalık önbelleği ve devam eden isteği paylaşır. Araçlara başka ilan kimliği veya URL verilemez; eksik şirket alanları `null` döner. Her sohbet isteği yeni agent ile çalışır ve en fazla üç araç çalıştırır; araç geçmişi kalıcı saklanmaz.
 
-Sohbet geçmişi yalnız açık sayfanın belleğinde tutulur; ilan değişince, temizleme düğmesine basınca veya sayfa yenilenince silinir. İsteklere son 12 mesaj eklenir. Mesajlar en fazla 4.000 karakter, ilan açıklaması en fazla 20.000 karakterdir. Yanıtlar tamamlandıktan sonra düz metin gösterilir. Hatalı istekler otomatik tekrarlanmaz; sorunuz yeniden gönderebilmeniz için yazı alanına geri konur. Zaman aşımı 25 saniyedir.
+Streaming'i koddan açıp kapatmak için `src/background/chat-api.ts` içindeki `CHAT_STREAMING_ENABLED` sabitini değiştirin: `true` canlı yazdırır, `false` yanıtı tek seferde gösterir ve sağlayıcı isteğinde `stream: false` kullanır. Bekleme ve tool durum göstergeleri iki modda da çalışır. Değişiklikten sonra `npm run build` çalıştırıp uzantıyı ve ilan sayfasını yenileyin.
+
+Sohbet geçmişi yalnız açık sayfanın belleğinde tutulur; ilan değişince, temizleme düğmesine basınca veya sayfa yenilenince silinir. İsteklere son 12 mesaj eklenir. Mesajlar en fazla 4.000 karakter, ilan açıklaması en fazla 20.000 karakterdir. Yanıtlar sağlayıcıdan geldikçe parça parça Markdown olarak gösterilir: başlıklar, kalın/italik metin, listeler, alıntılar, kod blokları ve GFM tabloları desteklenir. Kullanıcı mesajları düz metin kalır. Ham HTML çalıştırılmaz; görseller yalnız açıklama metniyle gösterilir ve web bağlantıları yeni sekmede açılır. Hatalı istekler otomatik tekrarlanmaz; sorunuz yeniden gönderebilmeniz için yazı alanına geri konur. İlk metin gelene kadar hareketli durum göstergesi görünür; ilan ve şirket araçları çalışırken işlem durumu güncellenir. Sohbeti temizlemek veya ilan değiştirmek devam eden akışı iptal eder. Kesilen akışın kısmi yanıtı görünür kalır, fakat sonraki istek geçmişine eklenmez; soru tekrar göndermek için taslağa döner. Zaman aşımı 25 saniyedir.
 
 ### İlan verileri
 
@@ -142,6 +144,7 @@ KariyerLens/
 ```
 
 ## 🔌 Yol haritası
+
 
 - [ ] Chrome Web Store üzerinden dağıtım
 - [ ] Farklı ilan türleri ve eksik veri senaryoları için daha geniş doğrulama

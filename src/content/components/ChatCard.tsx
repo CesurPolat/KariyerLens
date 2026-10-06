@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useJobChat } from "./use-job-chat.js";
+import { MarkdownMessage } from "./MarkdownMessage.js";
 import styles from "./chat.css?inline";
 
 const suggestions = ["İlanı özetle", "Aranan yetkinlikler neler?", "Mülakata nasıl hazırlanabilirim?"];
@@ -7,6 +8,7 @@ const suggestions = ["İlanı özetle", "Aranan yetkinlikler neler?", "Mülakata
 export function ChatCard({ jobId }: { jobId: string }) {
   const { messages, pending, status, input, submit, clear, openSettings } = useJobChat(jobId);
   const list = useRef<HTMLDivElement>(null);
+  const followBottom = useRef(true);
   const launcher = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -14,7 +16,7 @@ export function ChatCard({ jobId }: { jobId: string }) {
   useLayoutEffect(() => { setOpen(false); }, [jobId]);
   useLayoutEffect(() => {
     if (open) (input.current?.disabled ? closeButton.current : input.current)?.focus();
-    if (open && list.current) list.current.scrollTop = list.current.scrollHeight;
+    if (open && list.current) { followBottom.current = true; list.current.scrollTop = list.current.scrollHeight; }
   }, [open]);
   useEffect(() => {
     if (!open) return;
@@ -25,7 +27,8 @@ export function ChatCard({ jobId }: { jobId: string }) {
     return () => document.removeEventListener("keydown", onEscape);
   }, [open]);
   useLayoutEffect(() => {
-    if (list.current) list.current.scrollTop = list.current.scrollHeight;
+    if (messages.at(-1)?.role === "user") followBottom.current = true;
+    if (list.current && followBottom.current) list.current.scrollTop = list.current.scrollHeight;
   }, [messages, pending]);
 
   return <>
@@ -35,10 +38,15 @@ export function ChatCard({ jobId }: { jobId: string }) {
         <button id="close-chat" ref={closeButton} type="button" aria-label="Sohbeti kapat" onClick={close}>×</button></header>
       <nav><button id="clear" type="button" onClick={() => clear()}>Sohbeti temizle</button>
         <button id="settings" type="button" onClick={openSettings}>Ayarlar</button></nav>
-      <div id="messages" ref={list} role="log" aria-live="polite" aria-label="Sohbet mesajları" aria-busy={pending}>
+      <div id="messages" ref={list} role="log" aria-live="polite" aria-label="Sohbet mesajları" aria-busy={pending}
+        onScroll={event => { const element = event.currentTarget; followBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48; }}>
         {messages.map((message, index) => <div key={index} className={`message ${message.role}`}>
-          <strong>{message.role === "user" ? "Sen" : "KariyerLens"}</strong>{message.content}
+          <strong className="message-author">{message.role === "user" ? "Sen" : "KariyerLens"}</strong>
+          {message.role === "assistant" ? <MarkdownMessage content={message.content} /> : message.content}
         </div>)}
+        {pending && <div className="thinking" aria-label={status.text}>
+          <span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span><span>{status.text}</span>
+        </div>}
       </div>
       {!messages.length && <div id="suggestions">{suggestions.map(text =>
         <button key={text} type="button" disabled={pending} onClick={() => void submit(text)}>{text}</button>)}</div>}

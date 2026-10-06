@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { ChatMessage, ChatResult } from "../../shared/types.js";
+import type { ChatMessage, ChatResult, ChatStreamEvent } from "../../shared/types.js";
+import { MESSAGE_TYPES } from "../../shared/messages.js";
 
 export const INITIAL_STATUS = "Mesajların, ilan bilgileri ve araçlarla alınan şirket bilgileri seçtiğin yapay zekâ sağlayıcısına gönderilir. İlk kullanımda Ayarlar’ı aç.";
 
@@ -12,9 +13,11 @@ export function useJobChat(jobId: string) {
   const busy = useRef(false);
   const generation = useRef(0);
   const focusRequested = useRef(false);
+  const connection = useRef<chrome.runtime.Port | null>(null);
 
   function clear(text = "Sohbet temizlendi.") {
     generation.current++;
+    connection.current?.disconnect(); connection.current = null;
     history.current = [];
     busy.current = false;
     if (input.current) input.current.value = "";
@@ -25,7 +28,7 @@ export function useJobChat(jobId: string) {
 
   useLayoutEffect(() => {
     clear(INITIAL_STATUS);
-    return () => { generation.current++; };
+    return () => { generation.current++; connection.current?.disconnect(); connection.current = null; };
   }, [jobId]);
 
   useLayoutEffect(() => {
@@ -50,18 +53,55 @@ export function useJobChat(jobId: string) {
     setPending(true);
     setStatus({ text: "Yanıt hazırlanıyor…", error: false });
     if (input.current) input.current.value = "";
+    let partial = "";
 
     function restoreDraft(message: string) {
+      const failed = history.current;
       history.current = history.current.slice(0, -1);
-      setMessages(history.current);
+      setMessages(partial ? [...failed, { role: "assistant", content: partial }] : history.current);
       if (input.current) input.current.value = text;
-      setStatus({ text: message, error: true });
+      setStatus({ text: partial ? "Yanıt yarıda kesildi. " + message : message, error: true });
     }
 
     try {
-      const response: ChatResult = await chrome.runtime.sendMessage({
-        type: "CHAT_JOB", jobId,
-        messages: history.current.slice(-12).map(({ role, content }) => ({ role, content: content.slice(0, 4000) })),
+      const response = await new Promise<ChatResult>((resolve) => {
+        const port = chrome.runtime.connect({ name: MESSAGE_TYPES.CHAT_STREAM });
+        connection.current = port;
+        let finished = false;
+        let repaint: ReturnType<typeof setTimeout> | undefined;
+        const renderPartial = () => {
+          repaint = undefined;
+          if (isCurrent()) setMessages(partial ? [...history.current, { role: "assistant", content: partial }] : history.current);
+        };
+        const finish = (result: ChatResult) => {
+          if (finished) return;
+          finished = true; clearTimeout(repaint);
+          port.onMessage.removeListener(onMessage);
+          port.onDisconnect.removeListener(onDisconnect);
+          if (connection.current === port) connection.current = null;
+          port.disconnect(); resolve(result);
+        };
+        const onMessage = (event: ChatStreamEvent) => {
+          if (!isCurrent() || finished) return;
+          if (event.type === "done") finish(event.result);
+          else if (event.type === "status") setStatus({ text: event.text, error: false });
+          else if (event.type === "text") {
+            partial = event.content;
+            if (partial) setStatus({ text: "Yanıt yazılıyor…", error: false });
+            if (repaint === undefined) repaint = setTimeout(renderPartial, 40);
+          }
+        };
+        const onDisconnect = () => {
+          void chrome.runtime.lastError;
+          finish({ ok: false, code: "CONNECTION_CLOSED", message: "Bağlantı kesildi. Yeniden deneyin." });
+        };
+        port.onMessage.addListener(onMessage);
+        port.onDisconnect.addListener(onDisconnect);
+        try {
+          port.postMessage({ type: "CHAT_JOB", jobId,
+            messages: history.current.slice(-12).map(({ role, content }) => ({ role, content: content.slice(0, 4000) })),
+          });
+        } catch { finish({ ok: false, code: "CONNECTION_CLOSED", message: "Bağlantı kurulamadı. Yeniden deneyin." }); }
       });
       if (!isCurrent()) return;
       if (!response?.ok) restoreDraft(response?.message || "Yanıt alınamadı. Yeniden deneyin.");

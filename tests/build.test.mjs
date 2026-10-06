@@ -49,7 +49,7 @@ test("MV3 background runs a tool conversation without Node globals or dynamic co
     TextEncoder, TextDecoder, ReadableStream, Blob, FormData, performance, crypto: webcrypto,
     setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask, structuredClone, console,
     chrome: {
-      runtime: { id: "extension-test", onMessage: { addListener(fn) { listener = fn; } }, openOptionsPage: async () => {} },
+      runtime: { id: "extension-test", onMessage: { addListener(fn) { listener = fn; } }, onConnect: { addListener() {} }, openOptionsPage: async () => {} },
       action: { onClicked: { addListener() {} } },
       storage: { local: { setAccessLevel: async () => {}, get: async () => ({ chatSettings: { providers: { openai: { apiKey: "test-key", model: "test-model" } } } }) } },
       tabs: { sendMessage: async () => { bridgeCalls++; return { ok: true, data: { companyName: null, profileUrl: null, followers: null, openJobs: null, jobsUrl: null } }; } },

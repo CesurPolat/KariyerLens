@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 let listener;
+let connectListener;
 let storageAccess;
 let optionsOpened = 0;
 let companyBridgeResult = { ok: true, data: { companyName: "Örnek", profileUrl: "https://www.kariyer.net/firma-profil/ornek-111", followers: null, openJobs: 3, jobsUrl: "https://www.kariyer.net/is-ilanlari?fpi=111" } };
@@ -9,9 +10,10 @@ let bridgeThrows = false;
 const bridgeRequests = [];
 let requestCompany = false;
 let lastToolResult;
+let streamSource;
 let chatSettings = { provider: "openai", providers: { openai: { apiKey: "private-key", model: "test" } } };
 globalThis.chrome = {
-  runtime: { id: "extension-test", onMessage: { addListener(fn) { listener = fn; } }, async openOptionsPage() { optionsOpened++; } },
+  runtime: { id: "extension-test", onMessage: { addListener(fn) { listener = fn; } }, onConnect: { addListener(fn) { connectListener = fn; } }, async openOptionsPage() { optionsOpened++; } },
   action: { onClicked: { addListener() {} } },
   tabs: { async sendMessage(tabId, message, options) {
     bridgeRequests.push({ tabId, message, options });
@@ -30,6 +32,7 @@ globalThis.fetch = async (url, options) => {
     return Response.json({ jobGeneralInformation: { id: "123", title: "ERP", qualifications: "<p>SQL</p>" }, jobIstatistics: { totalApplication: 200 } });
   }
   const body = JSON.parse(options.body);
+  if (body.stream && streamSource) return streamSource(options);
   if (requestCompany && body.messages.at(-1).role !== "tool") return Response.json({ choices: [{ index: 0, message: { role: "assistant", content: null,
     tool_calls: [{ id: "company-1", type: "function", function: { name: "get_current_company_stats", arguments: "{}" } }],
   }, finish_reason: "tool_calls" }] });
@@ -70,6 +73,63 @@ test("closed tabs, changed jobs and invalid company payloads become structured t
     companyBridgeResult = { ok: true, data }; await askCompany(); assert.equal(lastToolResult.code, "COMPANY_UNAVAILABLE");
   }
   requestCompany = false;
+});
+
+function eventEmitter() {
+  const listeners = new Set();
+  return { addListener: (fn) => listeners.add(fn), emit: (message) => [...listeners].forEach((fn) => fn(message)) };
+}
+function streamPort(senderValue = sender) {
+  const events = [], onMessage = eventEmitter(), onDisconnect = eventEmitter();
+  let closed = false;
+  const port = { name: "CHAT_JOB_STREAM", sender: senderValue, onMessage, onDisconnect,
+    postMessage: (event) => events.push(event), disconnect() { closed = true; onDisconnect.emit(); } };
+  connectListener(port);
+  return { port, events, get closed() { return closed; }, send: (message) => onMessage.emit(message) };
+}
+const turn = () => new Promise((resolve) => setImmediate(resolve));
+async function until(predicate) { for (let i = 0; i < 100 && !predicate(); i++) await turn(); assert.ok(predicate()); }
+
+test("worker port streams tokens, handles one request, then returns one final reply", async () => {
+  let finish;
+  streamSource = () => new Response(new ReadableStream({ start(controller) {
+    const encode = (delta, reason = null) => new TextEncoder().encode("data: " + JSON.stringify({ id: "port-1", choices: [{ index: 0, delta, finish_reason: reason }] }) + "\n\n");
+    controller.enqueue(encode({ role: "assistant", content: "SQL" }));
+    finish = () => { controller.enqueue(encode({ content: " gerekir." })); controller.enqueue(encode({}, "stop")); controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n")); controller.close(); };
+  } }), { headers: { "Content-Type": "text/event-stream" } });
+  const connection = streamPort(), message = { type: "CHAT_JOB", jobId: "123", messages: [{ role: "user", content: "Özet" }] };
+  connection.send(message); connection.send(message);
+  await until(() => connection.events.some((event) => event.type === "text" && event.content === "SQL"));
+  assert.equal(connection.events.some((event) => event.type === "done"), false);
+  finish(); await until(() => connection.events.some((event) => event.type === "done"));
+  assert.deepEqual(connection.events.at(-1), { type: "done", result: { ok: true, reply: "SQL gerekir." } });
+  assert.equal(connection.events.filter((event) => event.type === "done").length, 1);
+  assert.doesNotMatch(JSON.stringify(connection.events), /private-key/);
+  connection.port.disconnect(); streamSource = undefined;
+});
+
+test("worker port disconnect aborts provider fetch and emits no late response", async () => {
+  let signal;
+  streamSource = (options) => new Response(new ReadableStream({ start(controller) {
+    signal = options.signal; signal.addEventListener("abort", () => controller.error(new DOMException("Aborted", "AbortError")));
+    controller.enqueue(new TextEncoder().encode('data: {"id":"port-2","choices":[{"index":0,"delta":{"role":"assistant","content":"SQL"},"finish_reason":null}]}\n\n'));
+  } }), { headers: { "Content-Type": "text/event-stream" } });
+  const connection = streamPort();
+  connection.send({ type: "CHAT_JOB", jobId: "123", messages: [{ role: "user", content: "Özet" }] });
+  await until(() => connection.events.some((event) => event.type === "text" && event.content));
+  const count = connection.events.length; connection.port.disconnect(); await turn(); await turn();
+  assert.equal(signal.aborted, true); assert.equal(connection.events.length, count); streamSource = undefined;
+});
+
+test("streaming ports reject untrusted senders and invalid input", async () => {
+  for (const value of [{ ...sender, id: "foreign" }, { ...sender, url: "https://evil.test/" }, { id: "extension-test" }]) {
+    assert.equal(streamPort(value).closed, true);
+  }
+  const before = requests.length, connection = streamPort();
+  connection.send({ type: "CHAT_JOB", jobId: "bad", messages: [] });
+  await until(() => connection.events.some((event) => event.type === "done"));
+  assert.equal(connection.events.at(-1).result.code, "INVALID_JOB_ID"); assert.equal(requests.length, before);
+  connection.port.disconnect();
 });
 test("missing setup and invalid input make no network calls", async () => {
   requests.length = 0; chatSettings = undefined;
