@@ -1162,6 +1162,87 @@ URL'deki büyük/küçük harfler paylaşılan örnekle aynıdır. Başlıklar p
 
 Sonuçlar şirket/pozisyon kimliği veya ilan sayısı içermiyor. Öneri algoritması, sıralama kuralları ve sonuç sayısının her zaman beş olup olmadığı doğrulanmadı. Alanların zorunluluğu, boş/başarısız yanıtlar, HTTP durum kodları ve rate-limit davranışı bilinmiyor. Yanıt mevcut `/job` ayrıştırıcısıyla uyumlu değildir.
 
+## Özgeçmiş listesi — `/jb/api/candidates/resumes`
+
+**Kaynak:** Kullanıcının paylaştığı URL, JSON yanıtı ve Bearer token bilgisi. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi.
+
+**Adres:** `https://candidatewebapigw.kariyer.net/jb/api/candidates/resumes?skip=0&size=8`
+
+```http
+Authorization: Bearer <TOKEN>
+```
+
+HTTP yöntemi paylaşılmadı. İstek gövdesi, ek başlıklar ve cookie gereksinimi doğrulanmadı.
+
+| Query parametresi | Paylaşılan değer / açıklama |
+| --- | --- |
+| `skip` | `0`; atlanacak kayıt sayısı olarak yorumlandı; sayfalama davranışı doğrulanmadı |
+| `size` | `8`; istenen kayıt sayısı olarak yorumlandı; kabul edilen sınırlar bilinmiyor |
+
+### Anonimleştirilmiş ve kısaltılmış yanıt örneği
+
+Paylaşılan yanıtta iki özgeçmiş ve `totalCount: 2` bulunuyor. Aşağıda tek kayıt gösterilmiştir; toplam sayı örnek için `1` yapılmıştır. CV adı, şifrelenmiş kimliği, tarihler ve görüntülenme sayıları değiştirilmiştir.
+
+```json
+{
+  "version": "1.0",
+  "statusCode": 200,
+  "result": {
+    "resumeList": [{
+      "encryptedId": "<REDACTED>",
+      "resumeName": "Örnek CV",
+      "lastUpdateDate": "2024-01-02T12:00:00",
+      "creationDate": "2024-01-01T00:00:00",
+      "publicResumeUrl": "",
+      "status": 1,
+      "language": 1,
+      "isExecutive": false,
+      "totalViewCount": 0,
+      "totalViewedCompanies": 0,
+      "missingFields": [],
+      "missingFieldsTooltipMessage": "",
+      "missingFieldItems": [],
+      "missingAreas": [],
+      "defaultCv": 1,
+      "occupancyRatio": "100",
+      "isSharedUriAccess": false,
+      "isCompanyAccess": true,
+      "statusDescription": "Tüm kariyer.net firmaları",
+      "hasReverseContact": false,
+      "reverseContactType": [],
+      "isAnonymized": false
+    }],
+    "totalCount": 1
+  }
+}
+```
+
+### Yanıtta gözlenen alanlar
+
+CV alanları `result.resumeList[]` altındadır. Açıklamalar alan adları ve paylaşılan örneğe dayanır; zorunlulukları ve kodların diğer değerleri doğrulanmadı.
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `version` | String; örnekte `1.0` |
+| `statusCode` | Sayı; gövdede `200`; HTTP durum kodu ayrıca paylaşılmadı |
+| `result.resumeList`, `result.totalCount` | Dizi / sayı; özgeçmişler ve toplam kayıt sayısı olarak yorumlandı |
+| `encryptedId`, `resumeName` | String; kodlanmış/şifrelenmiş özgeçmiş kimliği ve adı |
+| `lastUpdateDate`, `creationDate` | String; son güncelleme ve oluşturulma tarihleri; örnekte `YYYY-MM-DDTHH:mm:ss`, saat dilimi belirtilmemiş |
+| `publicResumeUrl` | String; herkese açık CV bağlantısı olarak yorumlandı, örnekte boş |
+| `status`, `language` | Sayı; durum ve dil kodları, örnekte her ikisi de `1`; kod anlamları doğrulanmadı |
+| `isExecutive` | Boolean; yönetici özgeçmişi bayrağı olarak yorumlandı |
+| `totalViewCount`, `totalViewedCompanies` | Sayı; toplam görüntülenme ve görüntüleyen şirket sayıları olarak yorumlandı; tekrarların sayılma kuralları bilinmiyor |
+| `missingFields`, `missingFieldItems`, `missingAreas` | Dizi; eksik alan/bölüm bilgileri olarak yorumlandı, örnekte boş; eleman yapıları bilinmiyor |
+| `missingFieldsTooltipMessage` | String; eksik alan açıklaması olarak yorumlandı, örnekte boş |
+| `defaultCv` | Sayı; varsayılan CV göstergesi olarak yorumlandı; paylaşılan iki kayıtta `1` ve `0` gözlendi |
+| `occupancyRatio` | String; profil/CV doluluk oranı olarak yorumlandı, örnekte `100` |
+| `isSharedUriAccess`, `isCompanyAccess` | Boolean; paylaşım bağlantısı ve şirket erişimi bayrakları olarak yorumlandı |
+| `statusDescription` | String; erişim/durum açıklaması, örnekte `Tüm kariyer.net firmaları` |
+| `hasReverseContact`, `reverseContactType` | Boolean / dizi; ters iletişim özelliğiyle ilişkili alanlar; kesin anlamları ve dizi eleman türü bilinmiyor |
+| `isAnonymized` | Boolean; CV'nin anonimleştirilme bayrağı olarak yorumlandı |
+
+Yanıt `result.resumeList` üzerinden ayrıştırılmalıdır. Sayısal `statusCode: 200` ve özgeçmiş listesi mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Sayfalama garantileri, boş/başarısız yanıtlar, HTTP durumları ve rate-limit davranışı doğrulanmadı.
+
 ## Şirket sayıları için mevcut veri kaynakları
 
 Uzantının çalışma kodunda bu sayılar için henüz bir JSON endpoint'i kullanılmıyor. Kullanıcının açıklamasına göre `/Search/company` yanıtındaki `data[].occurrence` şirketin açık ilan sayısını verir; bu kaynak henüz çalışma koduna entegre edilmedi.
@@ -1187,5 +1268,6 @@ Profil HTML isteği aynı kaynak üzerinden yapılır. Bu bölüm sayfa entegras
 - `POST /Search/autocomplete` için başlıklar, özgün `keyword` değeri, `occurrence` anlamları ve sonuç sınırları.
 - `GET /jb/api/search/autocomplete` için başlıklar, `type`/`count` anlamları, kategori ve sonuç sınırları.
 - `POST /Search/relatedsearch` için başlıklar, sonuç sınırları ve boş/başarısız yanıtlar.
+- `/jb/api/candidates/resumes` için HTTP yöntemi, sayfalama, durum/dil kodları ve boş/başarısız yanıtlar.
 
 Yeni kayıtlar gerçek istekte görülen URL ve alanlarla eklenecek; endpoint adları tahmin edilerek yazılmayacak. Paylaşılan örneklerden Cookie, Authorization, token ve kişisel veriler çıkarılmalıdır.
