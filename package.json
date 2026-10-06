@@ -10,7 +10,7 @@
     "build": "npm run typecheck && vite build",
     "dev": "npm run build && vite build --mode development --watch",
     "typecheck": "tsc --noEmit && tsc --project tsconfig.node.json --noEmit",
-    "test": "npm run build && node --import tsx --test tests/*.test.mjs",
+    "test": "npm run build && node --experimental-vm-modules --import tsx --test tests/*.test.mjs",
     "test:browser": "npm run build && node tests/serve.mjs"
   },
   "devDependencies": {
@@ -23,7 +23,11 @@
     "vite": "^8.3.3"
   },
   "dependencies": {
+    "@langchain/core": "1.2.16",
+    "@langchain/openai": "1.6.2",
+    "langchain": "1.5.15",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "zod": "4.6.5"
   }
 }

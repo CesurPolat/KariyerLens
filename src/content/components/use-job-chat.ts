@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ChatMessage, ChatResult } from "../../shared/types.js";
 
-export const INITIAL_STATUS = "Mesajların ve ilan bilgileri seçtiğin yapay zekâ sağlayıcısına gönderilir. İlk kullanımda Ayarlar’ı aç.";
+export const INITIAL_STATUS = "Mesajların, ilan bilgileri ve araçlarla alınan şirket bilgileri seçtiğin yapay zekâ sağlayıcısına gönderilir. İlk kullanımda Ayarlar’ı aç.";
 
 export function useJobChat(jobId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);

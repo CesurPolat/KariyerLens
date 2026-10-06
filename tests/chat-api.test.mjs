@@ -10,16 +10,18 @@ for (const provider of ["openai", "openrouter"]) {
     let calls = 0;
     const result = await chatWithJob(job, history, settings(provider), async (url, options) => {
       calls++;
-      assert.equal(url, provider === "openai" ? "https://api.openai.com/v1/chat/completions" : "https://openrouter.ai/api/v1/chat/completions");
-      assert.equal(options.headers.Authorization, "Bearer test-key");
+      assert.equal(String(url), provider === "openai" ? "https://api.openai.com/v1/chat/completions" : "https://openrouter.ai/api/v1/chat/completions");
+      assert.equal(new Headers(options.headers).get("authorization"), "Bearer test-key");
       assert.equal(options.credentials, "omit");
       assert.equal(options.method, "POST");
       const body = JSON.parse(options.body);
       assert.equal(body.stream, false); assert.equal(body.model, "test-model");
+      assert.deepEqual(body.tools.map((tool) => tool.function.name), ["get_current_job", "get_current_company_stats"]);
       assert.equal(body.messages[0].role, "system");
-      assert.match(body.messages[0].content, /ERP Uzmanı/);
-      assert.match(body.messages[0].content, /SQL & ERP/);
-      assert.doesNotMatch(body.messages[0].content, /evil|not included|test-key/);
+      const context = JSON.stringify(body.messages[0].content);
+      assert.match(context, /ERP Uzmanı/);
+      assert.match(context, /SQL & ERP/);
+      assert.doesNotMatch(context, /evil|not included|test-key/);
       assert.deepEqual(body.messages.slice(1), history);
       return Response.json({ choices: [{ message: { content: "  Özet  " } }] });
     });
@@ -65,4 +67,109 @@ test("25 second timeout aborts the request", async (t) => {
   t.mock.timers.tick(24999);
   let settled = false; request.then(() => { settled = true; }); await Promise.resolve(); assert.equal(settled, false);
   t.mock.timers.tick(1); assert.equal((await request).code, "TIMEOUT");
+});
+
+const toolReply = (name, id = "tool-1", args = {}) => Response.json({ choices: [{ index: 0, finish_reason: "tool_calls", message: {
+  role: "assistant", content: null, tool_calls: [{ id, type: "function", function: { name, arguments: JSON.stringify(args) } }],
+} }] });
+const textReply = (text = "Veriler alındı.") => Response.json({ choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: text } }] });
+const company = { companyName: "Örnek", profileUrl: "https://www.kariyer.net/firma-profil/ornek-111", followers: "16804 takipçi", openJobs: 3, jobsUrl: "https://www.kariyer.net/is-ilanlari?fpi=111" };
+
+for (const provider of ["openai", "openrouter"]) {
+  test(`${provider}: model calls both tools then returns final text`, async () => {
+    let modelCalls = 0, jobCalls = 0, companyCalls = 0;
+    const result = await chatWithJob({}, history, settings(provider), async (_, options) => {
+      const body = JSON.parse(options.body);
+      modelCalls++;
+      if (modelCalls === 1) return toolReply("get_current_job");
+      if (modelCalls === 2) {
+        const data = JSON.parse(body.messages.at(-1).content);
+        assert.equal(body.messages.at(-1).role, "tool");
+        assert.equal(data.data.qualifications, "SQL & ERP");
+        assert.equal(data.data.secret, undefined);
+        return toolReply("get_current_company_stats", "tool-2");
+      }
+      assert.deepEqual(JSON.parse(body.messages.at(-1).content), { ok: true, data: company });
+      assert.doesNotMatch(JSON.stringify(body.messages), /test-key/);
+      return textReply();
+    }, { loadJob: async () => { jobCalls++; return { ok: true, data: job, fetchedAt: 0 }; },
+      loadCompany: async () => { companyCalls++; return { ok: true, data: company }; } });
+    assert.deepEqual(result, { ok: true, reply: "Veriler alındı." });
+    assert.equal(modelCalls, 3); assert.equal(jobCalls, 2); assert.equal(companyCalls, 1);
+  });
+}
+
+test("tool failures are data and request tools have no persistent memory", async () => {
+  for (const code of ["JOB_CHANGED", "COMPANY_UNAVAILABLE", "COMPANY_PROFILE_ERROR"]) {
+    let calls = 0;
+    const result = await chatWithJob(job, history, settings(), async (_, options) => {
+      if (++calls === 1) {
+        assert.equal(JSON.parse(options.body).messages.length, 2);
+        return toolReply("get_current_company_stats");
+      }
+      assert.equal(JSON.parse(JSON.parse(options.body).messages.at(-1).content).code, code);
+      return textReply("Şirket bilgisi alınamadı.");
+    }, { loadJob: async () => ({ ok: true, data: job, fetchedAt: 0 }), loadCompany: async () => ({ ok: false, code, message: "Alınamadı" }) });
+    assert.equal(result.ok, true); assert.equal(calls, 2);
+  }
+});
+
+test("a fourth tool call stops execution before another model request", async () => {
+  let calls = 0, companyCalls = 0;
+  const result = await chatWithJob(job, history, settings(), async () => toolReply("get_current_company_stats", "tool-" + ++calls), {
+    loadJob: async () => ({ ok: true, data: job, fetchedAt: 0 }),
+    loadCompany: async () => { companyCalls++; return { ok: true, data: company }; },
+  });
+  assert.equal(result.code, "TOOL_LIMIT"); assert.equal(companyCalls, 3); assert.equal(calls, 4);
+});
+
+test("parallel tool calls share the three-execution budget", async () => {
+  let calls = 0, companyCalls = 0;
+  const result = await chatWithJob(job, history, settings(), async () => {
+    calls++;
+    return Response.json({ choices: [{ index: 0, message: { role: "assistant", content: null,
+      tool_calls: Array.from({ length: 5 }, (_, i) => ({ id: "call-" + i, type: "function", function: { name: "get_current_company_stats", arguments: "{}" } })),
+    }, finish_reason: "tool_calls" }] });
+  }, { loadJob: async () => ({ ok: true, data: job, fetchedAt: 0 }),
+    loadCompany: async () => { companyCalls++; return { ok: true, data: company }; } });
+  assert.equal(result.code, "TOOL_LIMIT"); assert.equal(companyCalls, 3); assert.equal(calls, 1);
+});
+
+test("unsupported tool model errors do not leak provider bodies", async () => {
+  const result = await chatWithJob(job, history, settings(), async () => Response.json({ error: { message: "test-key: tools unsupported", type: "invalid_request_error" } }, { status: 400 }));
+  assert.equal(result.code, "TOOLS_UNSUPPORTED"); assert.doesNotMatch(result.message, /test-key/);
+});
+
+test("tool schema rejects model supplied URLs and job IDs", async () => {
+  let calls = 0, companyCalls = 0;
+  const result = await chatWithJob(job, history, settings(), async () => ++calls === 1
+    ? toolReply("get_current_company_stats", "call-1", { url: "https://evil.test", jobId: "456" }) : textReply(), {
+    loadJob: async () => ({ ok: true, data: job, fetchedAt: 0 }), loadCompany: async () => { companyCalls++; return { ok: true, data: company }; },
+  });
+  assert.equal(result.ok, true); assert.equal(companyCalls, 0);
+});
+
+test("25-second deadline includes data loading and prevents late model calls", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let release, modelCalls = 0;
+  const result = chatWithJob({}, history, settings(), async () => { modelCalls++; return textReply(); }, {
+    loadJob: () => new Promise((resolve) => { release = resolve; }), loadCompany: async () => ({ ok: true, data: company }),
+  });
+  t.mock.timers.tick(25000);
+  assert.equal((await result).code, "TIMEOUT");
+  release({ ok: true, data: job, fetchedAt: 0 });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(modelCalls, 0);
+});
+
+test("deadline aborts an in-flight model fetch", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let ready, signal;
+  const started = new Promise((resolve) => { ready = resolve; });
+  const pending = chatWithJob(job, history, settings(), (_, options) => new Promise((_, reject) => {
+    signal = options.signal; ready();
+    signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+  }));
+  await started; t.mock.timers.tick(25000);
+  assert.equal((await pending).code, "TIMEOUT"); assert.equal(signal.aborted, true);
 });

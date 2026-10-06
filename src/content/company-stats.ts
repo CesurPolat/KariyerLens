@@ -1,71 +1,12 @@
-interface CompanyProfile { followers: string | null; openJobs: number | null; jobsUrl: string | null }
-interface CompanyState { identity: string; url: string; data: CompanyProfile | null; requestedAt: number | null; pending: boolean; failed?: boolean; controller?: AbortController }
+import type { CompanyProfile, CompanyStatsResult } from "../shared/types.js";
+import { CACHE_TTL_MS, cache, profileUrl, pageFollowers, loadProfile, cancelProfile } from "./company-profile.js";
+import { MESSAGE_TYPES } from "../shared/messages.js";
+interface CompanyState { identity: string; url: string; data: CompanyProfile | null; requestedAt: number | null; pending: boolean; failed?: boolean }
 
 (() => {
-  const CACHE_TTL_MS = 5 * 60 * 1000;
   const ROW_SELECTOR = '[data-kariyer-lens-company-stats="true"]';
-  const cache = new Map<string, { data: CompanyProfile; fetchedAt: number }>();
   let active: CompanyState | null = null;
   let scheduled = false;
-
-  // Requests stay on the current origin and only target company profile pages.
-  function profileUrl(value: string | null | undefined) {
-    try {
-      if (!value) return null;
-      const url = new URL(value, location.origin);
-      if (url.origin !== location.origin || !/^\/firma-profil\/[^/]+\/?$/.test(url.pathname)) return null;
-      return new URL(url.pathname.replace(/\/$/, ""), location.origin).href;
-    } catch { return null; }
-  }
-
-  function followerText(value: string | null) {
-    const match = String(value || "").trim().match(/^([\d.,]+(?:\s*[bkBmM])?)\s+takipçi$/i);
-    if (!match) return null;
-    const count = match[1];
-    if (/[bkBmM]/.test(count)) return `${count} takipçi`;
-    const number = Number(count.replace(/\./g, "").replace(",", "."));
-    return Number.isSafeInteger(number) && number >= 0
-      ? `${new Intl.NumberFormat("tr-TR").format(number)} takipçi` : null;
-  }
-
-  function pageFollowers(url: string) {
-    for (const details of document.querySelectorAll('[data-test="job-detail-company-card-large-detail"]')) {
-      const link = details.querySelector<HTMLElement>('a[href*="/firma-profil/"]');
-      if (profileUrl(link?.getAttribute("href")) !== url) continue;
-      for (const item of details.querySelectorAll('[data-test="job-detail-company-card-large-statistic-item"]')) {
-        const value = followerText(item.textContent);
-        if (value) return value;
-      }
-    }
-    return null;
-  }
-
-  function parseProfile(html: string, url: string): CompanyProfile {
-    const page = new DOMParser().parseFromString(html, "text/html");
-    page.querySelectorAll("script,style,template").forEach((node) => node.remove());
-    let followers: string | null = null;
-    for (const item of page.querySelectorAll("span,p,div")) {
-      if (item.children.length) continue;
-      followers = followerText(item.textContent);
-      if (followers) break;
-    }
-    const companyId = new URL(url).pathname.match(/-(\d+)$/)?.[1];
-    let openJobs: number | null = null;
-    let jobsUrl: string | null = null;
-    for (const link of page.querySelectorAll('a[href*="/is-ilanlari"]')) {
-      const match = (link.textContent || "").trim().match(/^Tümünü Gör\s*\(([\d.]+)\)$/i);
-      if (!match) continue;
-      try {
-        const target = new URL(link.getAttribute("href") || "", url);
-        if (target.origin !== location.origin || target.pathname !== "/is-ilanlari"
-          || !companyId || target.searchParams.get("fpi") !== companyId) continue;
-        const count = Number(match[1].replace(/\./g, ""));
-        if (!Number.isSafeInteger(count) || count < 0) continue;
-        openJobs = count; jobsUrl = target.href; break;
-      } catch { /* Ignore malformed or unrelated links. */ }
-    }
-    return { followers, openJobs, jobsUrl };
-  }
 
   function setText(element: Element, text: string) {
     if (element.textContent !== text) element.textContent = text;
@@ -108,21 +49,15 @@ interface CompanyState { identity: string; url: string; data: CompanyProfile | n
   async function load(state: CompanyState) {
     state.requestedAt = Date.now();
     state.pending = true;
-    const controller = new AbortController(); state.controller = controller;
-    const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch(state.url, { credentials: "same-origin", signal: controller.signal, headers: { Accept: "text/html" } });
-      if (!response.ok || (response.url && profileUrl(response.url) !== state.url)
-        || !response.headers.get("content-type")?.includes("text/html")) throw new Error("Invalid profile response");
-      const data = parseProfile(await response.text(), state.url);
-      if (controller.signal.aborted || active !== state) return;
+      const data = await loadProfile(state.url);
+      if (active !== state) return;
       state.data = data; state.failed = false;
-      if (data.followers || data.openJobs !== null) cache.set(state.url, { data, fetchedAt: Date.now() });
     } catch {
       if (active !== state) return;
       state.failed = true;
     } finally {
-      clearTimeout(timer); state.pending = false;
+      state.pending = false;
       if (active === state) sync();
     }
   }
@@ -134,13 +69,13 @@ interface CompanyState { identity: string; url: string; data: CompanyProfile | n
     const url = profileUrl(link?.getAttribute("href"));
     const button = card && card.querySelector<HTMLElement>('[data-test="job-detail-company-card-follow-button"], .job-detail-company-card-follow-button');
     if (!card || !url || !button) {
-      active?.controller?.abort(); active = null;
+      if (active) cancelProfile(active.url); active = null;
       document.querySelectorAll(ROW_SELECTOR).forEach((row) => row.remove());
       return;
     }
     const identity = `${jobId}|${url}`;
     if (active?.identity !== identity) {
-      active?.controller?.abort();
+      if (active) cancelProfile(active.url);
       const cached = cache.get(url);
       const fresh = cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS;
       active = { identity, url, data: fresh ? cached.data : null, requestedAt: fresh ? cached.fetchedAt : null, pending: false };
@@ -148,6 +83,31 @@ interface CompanyState { identity: string; url: string; data: CompanyProfile | n
     render(card, button, active);
     if (!active.pending && (active.requestedAt === null || Date.now() - active.requestedAt >= CACHE_TTL_MS)) load(active);
   }
+
+
+  async function currentCompany(jobId: string): Promise<CompanyStatsResult> {
+    const changed = (): CompanyStatsResult => ({ ok: false, code: "JOB_CHANGED", message: "Açık ilan değişti. Yeni ilanda yeniden deneyin." });
+    if (!jobId || findJobId() !== jobId) return changed();
+    const card = document.querySelector<HTMLElement>(".job-detail-right-column .job-detail-company-card");
+    const link = card?.querySelector<HTMLAnchorElement>('a[href*="/firma-profil/"]');
+    const url = profileUrl(link?.getAttribute("href"));
+    const companyName = link?.textContent?.trim().slice(0, 500) || null;
+    if (!url) return { ok: true, data: { companyName, profileUrl: null, followers: null, openJobs: null, jobsUrl: null } };
+    try {
+      const data = await loadProfile(url);
+      if (findJobId() !== jobId || profileUrl(card?.querySelector('a[href*="/firma-profil/"]')?.getAttribute("href")) !== url || !card?.isConnected) return changed();
+      return { ok: true, data: { ...data, followers: pageFollowers(url) || data.followers, companyName, profileUrl: url } };
+    } catch {
+      if (findJobId() !== jobId) return changed();
+      return { ok: false, code: "COMPANY_PROFILE_ERROR", message: "Şirket profili yüklenemedi." };
+    }
+  }
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (sender.id !== chrome.runtime.id || sender.tab || message?.type !== MESSAGE_TYPES.GET_CURRENT_COMPANY_STATS) return;
+    currentCompany(typeof message.jobId === "string" ? message.jobId : "").then(sendResponse)
+      .catch(() => sendResponse({ ok: false, code: "COMPANY_PROFILE_ERROR", message: "Şirket bilgileri alınamadı." }));
+    return true;
+  });
 
   new MutationObserver(() => {
     if (scheduled) return;

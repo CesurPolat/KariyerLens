@@ -57,7 +57,9 @@ Sohbet kartı, ilan özeti/SVG gösterge ve ayarlar sayfası React + TSX compone
 3. **OpenAI** veya **OpenRouter** seçin, kendi API anahtarınızı ve hesabınızın erişebildiği modelin tam kimliğini girip **Kaydet** düğmesine basın. OpenRouter kimlikleri `sağlayıcı/model` biçimindedir.
 4. İlanın sağ sütunundaki sohbetten sorunuzu gönderin. Enter gönderir; Shift+Enter yeni satır açar.
 
-Her sağlayıcının anahtarı ve modeli ayrı saklanır. Anahtarı ayarlardaki silme düğmesiyle kaldırabilirsiniz. Anahtar ve model girilmeden AI isteği gönderilmez. Ayrı bir sunucu gerekmez. npm, Vite ve TypeScript derleme altyapısı hazırdır; mevcut chat hâlâ sağlayıcılara doğrudan istek gönderir, LangChain agent ve tool entegrasyonu henüz eklenmemiştir.
+Her sağlayıcının anahtarı ve modeli ayrı saklanır. Anahtarı ayarlardaki silme düğmesiyle kaldırabilirsiniz. Anahtar ve model girilmeden AI isteği gönderilmez. Ayrı bir sunucu gerekmez. Sohbet, background service worker içinde LangChain agent kullanır; seçtiğiniz model **tool calling** desteklemelidir.
+
+Asistan soruya göre iki parametresiz araç kullanabilir: `get_current_job` açık ilanın detaylarını ve başvuru verilerini, `get_current_company_stats` ise açık ilanın şirket adı, profil adresi, takipçi bilgisi, açık ilan sayısı ve ilan listesi adresini getirir. Şirket kaynağı bir JSON API değil, mevcut aynı kaynaklı profil sayfasıdır. Gösterge ve araç aynı beş dakikalık önbelleği ve devam eden isteği paylaşır. Araçlara başka ilan kimliği veya URL verilemez; eksik şirket alanları `null` döner. Her sohbet isteği yeni agent ile çalışır ve en fazla üç araç çalıştırır; araç geçmişi kalıcı saklanmaz.
 
 Sohbet geçmişi yalnız açık sayfanın belleğinde tutulur; ilan değişince, temizleme düğmesine basınca veya sayfa yenilenince silinir. İsteklere son 12 mesaj eklenir. Mesajlar en fazla 4.000 karakter, ilan açıklaması en fazla 20.000 karakterdir. Yanıtlar tamamlandıktan sonra düz metin gösterilir. Hatalı istekler otomatik tekrarlanmaz; sorunuz yeniden gönderebilmeniz için yazı alanına geri konur. Zaman aşımı 25 saniyedir.
 
@@ -80,7 +82,7 @@ Uzantı, sayfanın mevcut tarih alanını değiştirmez. Ek bilgi bloğu için k
 
 Manifest, Kariyer.net sayfalarında içerik betiği çalıştırma, Kariyer.net API'sine erişim ve `storage` izni tanımlar. Mevcut API önbelleği kalıcı depolama yerine service worker belleğinde tutulur.
 
-Asistan kullanıldığında mesajlarınız, son sohbet mesajları ve ilanın başlığı, şirketi, açıklaması, aday kriterleri ve başvuru verileri seçtiğiniz **OpenAI** (`api.openai.com`) veya **OpenRouter** (`openrouter.ai`) API'sine gönderilir. Kariyer.net oturum bilgileri AI isteğine eklenmez. İlan verileri kendiliğinden AI sağlayıcısına gönderilmez; gönderim sohbet mesajınızla başlar. API kullanımı sağlayıcının tarifesine göre ücretlendirilebilir.
+Asistan kullanıldığında mesajlarınız, son sohbet mesajları ve ilanın başlığı, şirketi, açıklaması, aday kriterleri ve başvuru verileri seçtiğiniz **OpenAI** (`api.openai.com`) veya **OpenRouter** (`openrouter.ai`) API'sine gönderilir. Şirket aracı çağrılırsa şirket adı, profil adresi, takipçi bilgisi, açık ilan sayısı ve ilan listesi adresi de gönderilir. Kariyer.net oturum bilgileri AI isteğine eklenmez. İlan verileri kendiliğinden AI sağlayıcısına gönderilmez; gönderim sohbet mesajınızla başlar. API kullanımı sağlayıcının tarifesine göre ücretlendirilebilir; araç kullanımında bir soru için birden fazla model isteği yapılabilir.
 
 API anahtarları `chrome.storage.local` içinde yalnız bu bilgisayarda saklanır; bu depolama şifreli bir kasa değildir. İçerik betiklerinin depolamaya erişimi kapatılır. Anahtarlar sayfa DOM'una, sohbet kartına veya kaynak koda yazılmaz; yalnız uzantı ayarları ve arka plan service worker'ı tarafından kullanılır. Manifest bu iki AI sağlayıcısına erişim izni içerir.
 

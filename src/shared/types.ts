@@ -66,3 +66,14 @@ export interface ExtensionMessage {
   jobId?: unknown;
   messages?: unknown;
 }
+
+export interface CompanyProfile {
+  followers: string | null;
+  openJobs: number | null;
+  jobsUrl: string | null;
+}
+export interface CompanyStats extends CompanyProfile {
+  companyName: string | null;
+  profileUrl: string | null;
+}
+export type CompanyStatsResult = { ok: true; data: CompanyStats } | Failure;
