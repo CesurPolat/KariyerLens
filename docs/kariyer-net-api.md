@@ -1378,6 +1378,137 @@ Görüntülenme alanları `result[].resumeViewList[]` altındadır. Açıklamala
 
 Gruplama ve tekrar görüntülemeleri birleştirme kuralları, sıralama garantisi ve sayfalama kapsamı doğrulanmadı. Özgeçmiş görüntülenmesi mülakat veya kabul anlamına gelmez. Bu endpoint'in `result` dizisi, özgeçmiş listesi endpoint'indeki `result.resumeList` nesnesinden farklıdır ve mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Boş/başarısız yanıtlar, HTTP durumları ve rate-limit davranışı bilinmiyor.
 
+## Ön yazı listesi — `GET /coverletters`
+
+**Kaynak:** Kullanıcının paylaştığı URL, GET yöntemi, Bearer token bilgisi ve JSON yanıtı. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi.
+
+```http
+GET https://candidatewebapigw.kariyer.net/coverletters?index=0&size=10
+Authorization: Bearer <TOKEN>
+```
+
+Ek başlıklar ve cookie gereksinimi doğrulanmadı. İstek gövdesi paylaşılmadı.
+
+| Query parametresi | Paylaşılan değer / açıklama |
+| --- | --- |
+| `index` | `0`; sayfa indeksi olarak yorumlandı; yanıtta `pageIndex: 0` ve `indexFrom: 0` gözlendi |
+| `size` | `10`; sayfa boyutu olarak yorumlandı; yanıtta `pageSize: 10` gözlendi; kabul edilen sınırlar bilinmiyor |
+
+### Anonimleştirilmiş ve kısaltılmış yanıt örneği
+
+Paylaşılan yanıtta on ön yazı, `totalCount: 10` ve `totalPages: 1` bulunuyor. Aşağıdaki örnek tek kayda indirgenmiş, `totalCount` örnek için `1` yapılmıştır. İstek takip kimliği, sunucu adı, ön yazı kimliği, adı, içeriği ve tarihleri değiştirilmiştir. Ön yazı `id` alanı paylaşılan yanıtta sayıdır; yer tutucu için string gösterilir.
+
+```json
+{
+  "header": {
+    "globalId": "<REQUEST_ID>",
+    "isSuccess": true,
+    "message": null,
+    "responseCode": 0,
+    "hostDateTime": "0001-01-01T00:00:00",
+    "languageId": null,
+    "machineName": "<SERVER_NAME>"
+  },
+  "body": {
+    "pageIndex": 0,
+    "pageSize": 10,
+    "totalCount": 1,
+    "totalPages": 1,
+    "indexFrom": 0,
+    "items": [{
+      "id": "<COVER_LETTER_ID>",
+      "name": "Örnek ön yazı",
+      "content": "Merhaba, örnek başvuru metni.",
+      "createDate": "2024-01-01T12:00:00",
+      "lastModifyDate": "2024-01-02T12:00:00"
+    }],
+    "hasPreviousPage": false,
+    "hasNextPage": false
+  }
+}
+```
+
+### Yanıtta gözlenen alanlar
+
+Alan açıklamaları paylaşılan örnek ve alan adlarından yorumlanmıştır; zorunlulukları ve diğer olası değerleri doğrulanmadı.
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `header.globalId` | String; istek takip kimliği olarak yorumlandı |
+| `header.isSuccess` | Boolean; yanıtın başarı bayrağı |
+| `header.message`, `header.languageId` | Örnekte null; diğer değerlerin türleri bilinmiyor |
+| `header.responseCode` | Sayı; örnekte `0`, kod sözleşmesi doğrulanmadı |
+| `header.hostDateTime` | String; örnekte `0001-01-01T00:00:00`; gerçek işlem zamanı olarak kabul edilmemeli |
+| `header.machineName` | String; yanıtı üreten sunucunun adı olarak yorumlandı |
+| `body.pageIndex`, `body.pageSize` | Sayı; sayfa indeksi ve boyutu |
+| `body.totalCount`, `body.totalPages` | Sayı; toplam ön yazı ve sayfa sayıları olarak yorumlandı |
+| `body.indexFrom` | Sayı; indeks başlangıcı olarak yorumlandı, örnekte `0` |
+| `body.items` | Dizi; ön yazı kayıtları |
+| `body.items[].id`, `.name` | Sayı / string; ön yazı kimliği ve adı |
+| `body.items[].content` | String; ön yazı içeriği veya liste özeti; tam metin olduğu doğrulanmadı |
+| `body.items[].createDate`, `.lastModifyDate` | String; oluşturulma ve son değişiklik tarihleri, örnekte `YYYY-MM-DDTHH:mm:ss`; saat dilimi belirtilmemiş |
+| `body.hasPreviousPage`, `body.hasNextPage` | Boolean; önceki/sonraki sayfa varlığı |
+
+Paylaşılan `content` değerleri cümle veya kelime ortasında bitiyor; liste endpoint'i kısaltılmış içerik döndürüyor olabilir. Bunlar tam ön yazı olarak kabul edilmemelidir; kesme kuralı ve tam metnin alınacağı endpoint henüz doğrulanmadı. Yanıt `body.items` üzerinden ayrıştırılmalıdır ve mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Sayfalama davranışı, boş/başarısız yanıtlar, HTTP durumları ve rate-limit davranışı bilinmiyor.
+
+## Takip edilen şirketler — `GET /Search/my-followed-companies`
+
+**Kaynak:** Kullanıcının paylaştığı URL, GET yöntemi, Bearer token bilgisi ve JSON yanıt dosyası. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi.
+
+```http
+GET https://candidatesearchapigateway.kariyer.net/Search/my-followed-companies
+Authorization: Bearer <TOKEN>
+```
+
+Paylaşılan URL'de query parametresi yoktur. İstek gövdesi paylaşılmadı; ek başlıklar ve cookie gereksinimi doğrulanmadı.
+
+### Anonimleştirilmiş ve kısaltılmış yanıt örneği
+
+Paylaşılan `data` dizisinde altı şirket bulunuyor. Aşağıda tek kayıt gösterilmiştir; şirket adı, kimlikleri, logo/profil bağlantıları ve sektör bilgileri değiştirilmiştir. `profileId` paylaşılan yanıtta sayıdır; yer tutucu için string gösterilir. `id` paylaşılan tüm kayıtlarda null'dır.
+
+```json
+{
+  "statusCode": "Success",
+  "status": "Success",
+  "data": [{
+    "id": null,
+    "name": "Örnek şirket",
+    "companyId": "<COMPANY_ID>",
+    "profileId": "<PROFILE_ID>",
+    "occurrence": 0,
+    "type": "Company",
+    "logo": "<LOGO_URL>",
+    "sectors": [{"id": "<SECTOR_ID>", "name": "Örnek sektör"}],
+    "companyUrl": "/firma-profil/<COMPANY_SLUG>",
+    "isFollowed": true,
+    "isAmbargoed": false
+  }],
+  "message": null,
+  "error": null
+}
+```
+
+### Yanıtta gözlenen alanlar
+
+Alan açıklamaları paylaşılan örnek ve alan adlarından yorumlanmıştır; zorunlulukları doğrulanmadı. `isAmbargoed` yazımı yanıtla aynıdır.
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `statusCode`, `status` | String; örnekte `Success` |
+| `data` | Dizi; takip edilen şirketler |
+| `data[].id` | Örnekte null; şirket kimliği olarak kullanılmamalı |
+| `data[].name`, `.companyId` | String; şirket adı ve kimliği |
+| `data[].profileId` | Sayı; şirket profil kimliği |
+| `data[].occurrence` | Sayı; `/Search/company` için açıklanan açık ilan sayısıyla aynı alan adı kullanılıyor; bu endpoint'teki anlamı ayrıca doğrulanmadı |
+| `data[].type` | String; örnekte `Company` |
+| `data[].logo`, `.companyUrl` | String; logo adresi ve göreli şirket profil yolu |
+| `data[].sectors` | Dizi; string `id` ve `name` içeren sektör nesneleri |
+| `data[].isFollowed` | Boolean; takip durumu |
+| `data[].isAmbargoed` | Boolean; şirket kısıtlamasıyla ilgili bayrak olarak yorumlandı |
+| `message`, `error` | Örnekte null; hata durumundaki türleri bilinmiyor |
+
+Şirket kayıtları `/Search/company` yanıtına benzer; burada `id` null olduğundan kimlik için `companyId`/`profileId` alanları değerlendirilmelidir. Paylaşılan yanıtta toplam sayı veya sayfalama metadatası bulunmuyor; altı kayıt dönmesi tüm kayıtların tek istekte döneceğini garanti etmez. Yanıt mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Boş/başarısız yanıtlar, HTTP durumları ve rate-limit davranışı bilinmiyor.
+
 ## Şirket sayıları için mevcut veri kaynakları
 
 Uzantının çalışma kodunda bu sayılar için henüz bir JSON endpoint'i kullanılmıyor. Kullanıcının açıklamasına göre `/Search/company` yanıtındaki `data[].occurrence` şirketin açık ilan sayısını verir; bu kaynak henüz çalışma koduna entegre edilmedi.
@@ -1405,5 +1536,7 @@ Profil HTML isteği aynı kaynak üzerinden yapılır. Bu bölüm sayfa entegras
 - `POST /Search/relatedsearch` için başlıklar, sonuç sınırları ve boş/başarısız yanıtlar.
 - `/jb/api/candidates/resumes` için HTTP yöntemi, sayfalama, durum/dil kodları ve boş/başarısız yanıtlar.
 - `GET /jb/api/candidates/resumes/view` için sayfalama kapsamı, görüntülenme gruplama kuralları ve boş/başarısız yanıtlar.
+- `GET /coverletters` için sayfalama, içerik kısaltma davranışı, tam metin kaynağı ve boş/başarısız yanıtlar.
+- `GET /Search/my-followed-companies` için sonuç sınırları, `occurrence` anlamı ve boş/başarısız yanıtlar.
 
 Yeni kayıtlar gerçek istekte görülen URL ve alanlarla eklenecek; endpoint adları tahmin edilerek yazılmayacak. Paylaşılan örneklerden Cookie, Authorization, token ve kişisel veriler çıkarılmalıdır.
