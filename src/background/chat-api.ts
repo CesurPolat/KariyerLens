@@ -8,6 +8,11 @@ import type { KariyerToolResult } from "./kariyer-tools.js";
 
 // false: yanıt tek seferde gelir; bekleme ve tool durumları gösterilmeye devam eder.
 export const CHAT_STREAMING_ENABLED = true;
+export const CHAT_TIMEOUT_MS = 120_000;
+export const CHAT_TOTAL_TIMEOUT_MS = 600_000;
+export const CHAT_MAX_TOOL_CALLS = 8;
+// Allow model, tool and middleware steps for each sequential tool round and the final reply.
+const CHAT_RECURSION_LIMIT = 64;
 
 const ENDPOINTS = Object.freeze({
   openai: "https://api.openai.com/v1/chat/completions",
@@ -84,28 +89,40 @@ export async function chatWithJob(job: Partial<Job>, messages: unknown, settings
   };
   const runTool = async (load: () => Promise<unknown>, status: string) => {
     guard();
-    if (++toolCalls > 3) { limitExceeded = true; throw new Error("TOOL_LIMIT"); }
+    if (++toolCalls > CHAT_MAX_TOOL_CALLS) { limitExceeded = true; throw new Error("TOOL_LIMIT"); }
+    activity();
     emit({ type: "status", text: status });
     const result = await load();
     guard();
+    activity();
     return JSON.stringify(result);
   };
   let timer: ReturnType<typeof setTimeout>;
+  let timeoutReason: "idle" | "total" | undefined;
+  const expire = (reason: "idle" | "total") => {
+    timeoutReason = reason;
+    controller.abort();
+  };
+  const activity = () => {
+    if (controller.signal.aborted) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => expire("idle"), CHAT_TIMEOUT_MS);
+  };
   let rejectAborted: () => void;
   const aborted = new Promise<never>((_, reject) => {
     rejectAborted = () => reject(new DOMException("Aborted", "AbortError"));
     controller.signal.addEventListener("abort", rejectAborted, { once: true });
     if (controller.signal.aborted) rejectAborted();
   });
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => { controller.abort(); reject(new DOMException("Aborted", "AbortError")); }, 25000);
-  });
+  activity();
+  const totalTimer = setTimeout(() => expire("total"), CHAT_TOTAL_TIMEOUT_MS);
   const execute = async (): Promise<ChatResult> => {
     guard();
     emit({ type: "status", text: "İlan inceleniyor…" });
     if (services) {
       const result = await services.loadJob();
       guard();
+      activity();
       if (!result.ok) return result;
       job = result.data;
     }
@@ -143,6 +160,7 @@ export async function chatWithJob(job: Partial<Job>, messages: unknown, settings
     const agent = createAgent({ model, tools,
       middleware: [createMiddleware({ name: "RequestLimits", beforeModel: () => {
         guard();
+        activity();
         if (useStreaming) emit({ type: "text", content: "" });
         emit({ type: "status", text: "Yanıt hazırlanıyor…" });
       } })],
@@ -152,9 +170,10 @@ export async function chatWithJob(job: Partial<Job>, messages: unknown, settings
     let last: { type?: string; content?: unknown } | undefined;
     if (useStreaming) {
       let reply = "";
-      const stream = await agent.stream(input, { signal: controller.signal, recursionLimit: 12, streamMode: ["messages", "values"] });
+      const stream = await agent.stream(input, { signal: controller.signal, recursionLimit: CHAT_RECURSION_LIMIT, streamMode: ["messages", "values"] });
       for await (const [mode, data] of stream) {
         guard();
+        activity();
         if (mode === "messages") {
           const [chunk] = data;
           const delta = chunk.type === "ai" ? textContent(chunk.content) : "";
@@ -165,7 +184,7 @@ export async function chatWithJob(job: Partial<Job>, messages: unknown, settings
         }
       }
     } else {
-      const result = await agent.invoke(input, { signal: controller.signal, recursionLimit: 12 });
+      const result = await agent.invoke(input, { signal: controller.signal, recursionLimit: CHAT_RECURSION_LIMIT });
       last = result.messages.at(-1);
     }
     guard();
@@ -173,11 +192,13 @@ export async function chatWithJob(job: Partial<Job>, messages: unknown, settings
     if (last?.type !== "ai" || !reply.trim()) return fail("INVALID_RESPONSE", "Sağlayıcıdan geçerli bir metin yanıtı alınamadı.");
     return { ok: true, reply: reply.trim() };
   };
-  try { return await Promise.race([execute(), timeout, aborted]); }
+  try { return await Promise.race([execute(), aborted]); }
   catch (error) {
     if (streaming?.signal?.aborted) return fail("CANCELLED", "Yanıt durduruldu.");
-    if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) return fail("TIMEOUT", "Yanıt 25 saniye içinde alınamadı. Yeniden deneyebilirsiniz.");
-    if (limitExceeded || (error instanceof Error && error.name === "GraphRecursionError")) return fail("TOOL_LIMIT", "Araç çağrısı sınırına ulaşıldı. Daha kısa bir soruyla yeniden deneyin.");
+    if (timeoutReason === "total") return fail("TIMEOUT", `Yanıtın toplam süresi ${CHAT_TOTAL_TIMEOUT_MS / 60_000} dakikayı aştı. Yeniden deneyebilirsiniz.`);
+    if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) return fail("TIMEOUT", `${CHAT_TIMEOUT_MS / 1000} saniyedir yeni yanıt veya işlem sonucu alınamadı. Yeniden deneyebilirsiniz.`);
+    if (limitExceeded) return fail("TOOL_LIMIT", `Bu yanıt için ${CHAT_MAX_TOOL_CALLS} araç çağrısı sınırına ulaşıldı. İsteği birkaç adıma bölerek yeniden deneyin.`);
+    if (error instanceof Error && error.name === "GraphRecursionError") return fail("TOOL_LIMIT", "Asistan işlem adımı sınırına ulaştı. İsteği birkaç adıma bölerek yeniden deneyin.");
     const status = error && typeof error === "object" && "status" in error ? error.status : undefined;
     if (status === 401 || status === 403) return fail("AUTH_ERROR", "API anahtarı geçersiz veya bu modele erişiminiz yok.");
     if (status === 402 || status === 429) return fail("QUOTA_ERROR", "Kota, bakiye veya istek sınırına ulaşıldı. Sağlayıcı hesabınızı kontrol edin.");
@@ -186,7 +207,7 @@ export async function chatWithJob(job: Partial<Job>, messages: unknown, settings
     if (error instanceof SyntaxError || (error instanceof Error && /choices|message|content|JSON/i.test(error.message))) return fail("INVALID_RESPONSE", "Sağlayıcının yanıtı okunamadı.");
     return fail("NETWORK_ERROR", "Yapay zekâ bağlantısı kurulamadı. İnternet bağlantınızı kontrol edin.");
   } finally {
-    clearTimeout(timer!); streaming?.signal?.removeEventListener("abort", cancel);
+    clearTimeout(timer!); clearTimeout(totalTimer); streaming?.signal?.removeEventListener("abort", cancel);
     controller.signal.removeEventListener("abort", rejectAborted!);
   }
 }

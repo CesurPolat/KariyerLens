@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chatWithJob } from "../src/background/chat-api.ts";
+import { chatWithJob, CHAT_TIMEOUT_MS, CHAT_TOTAL_TIMEOUT_MS } from "../src/background/chat-api.ts";
 
 const job = { id: "123", title: "SQL Uzmanı", sector: [], workAreas: [], education: [], languages: [], isActive: true, isEasyApply: false };
 const history = [{ role: "user", content: "Özetle" }];
@@ -95,3 +95,43 @@ test("client disconnect aborts the provider stream", async () => {
   await ready; controller.abort();
   assert.equal((await pending).code, "CANCELLED"); assert.equal(providerSignal.aborted, true);
 });
+
+for (const outcome of ["complete", "idle", "total"]) {
+  test(`long active stream: ${outcome}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const source = sse();
+    let nextText, providerSignal;
+    let received = new Promise(resolve => { nextText = resolve; });
+    const pending = chatWithJob(job, history, settings("openai"), async (_, options) => {
+      providerSignal = options.signal;
+      providerSignal.addEventListener("abort", () => source.error(new DOMException("Aborted", "AbortError")));
+      source.write(chunk({ role: "assistant", content: "Başlangıç" }));
+      return source.response;
+    }, undefined, { onProgress: event => { if (event.type === "text" && event.content) nextText(); } });
+    await received;
+    const interval = CHAT_TIMEOUT_MS / 2;
+    const rounds = outcome === "total" ? CHAT_TOTAL_TIMEOUT_MS / interval - 1 : 3;
+    for (let i = 0; i < rounds; i++) {
+      received = new Promise(resolve => { nextText = resolve; });
+      t.mock.timers.tick(interval);
+      assert.equal(providerSignal.aborted, false);
+      source.write(chunk({ content: " devam" }));
+      await received;
+    }
+    if (outcome === "complete") {
+      source.finish();
+      const result = await pending;
+      assert.equal(result.ok, true);
+      assert.equal(result.reply, "Başlangıç" + " devam".repeat(rounds));
+      // Cleared timers must not abort a completed response.
+      t.mock.timers.tick(CHAT_TOTAL_TIMEOUT_MS);
+      assert.equal(providerSignal.aborted, false);
+    } else {
+      t.mock.timers.tick(outcome === "idle" ? CHAT_TIMEOUT_MS : interval);
+      const result = await pending;
+      assert.equal(result.code, "TIMEOUT");
+      assert.match(result.message, outcome === "idle" ? /yeni yanıt veya işlem sonucu/ : /toplam süresi/);
+      assert.equal(providerSignal.aborted, true);
+    }
+  });
+}

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chatWithJob, validateMessages, plainText, buildContext } from "../src/background/chat-api.ts";
+import { chatWithJob, validateMessages, plainText, buildContext, CHAT_TIMEOUT_MS, CHAT_MAX_TOOL_CALLS } from "../src/background/chat-api.ts";
 import { KARIYER_TOOLS } from "../src/background/kariyer-tools.ts";
 const history = [{ role: "user", content: "İlanı özetle" }];
 const settings = (provider = "openai") => ({ provider, providers: { [provider]: { apiKey: "test-key", model: "test-model" } } });
@@ -69,12 +69,12 @@ test("malformed and empty replies", async () => {
 test("network failure", async () => {
   assert.equal((await chatWithJob(job, history, settings(), async () => { throw new TypeError("offline"); })).code, "NETWORK_ERROR");
 });
-test("25 second timeout aborts the request", async (t) => {
+test("total chat timeout aborts the request", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const request = chatWithJob(job, history, settings(), (_, { signal }) => new Promise((resolve, reject) => {
     signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
   }));
-  t.mock.timers.tick(24999);
+  t.mock.timers.tick(CHAT_TIMEOUT_MS - 1);
   let settled = false; request.then(() => { settled = true; }); await Promise.resolve(); assert.equal(settled, false);
   t.mock.timers.tick(1); assert.equal((await request).code, "TIMEOUT");
 });
@@ -143,25 +143,40 @@ test("tool failures are data and request tools have no persistent memory", async
   }
 });
 
-test("a fourth tool call stops execution before another model request", async () => {
+test("exceeding the tool budget stops execution before another model request", async () => {
   let calls = 0, companyCalls = 0;
   const result = await chatWithJob(job, history, settings(), async () => toolReply("get_current_company_stats", "tool-" + ++calls), {
     loadJob: async () => ({ ok: true, data: job, fetchedAt: 0 }),
     loadCompany: async () => { companyCalls++; return { ok: true, data: company }; },
   });
-  assert.equal(result.code, "TOOL_LIMIT"); assert.equal(companyCalls, 3); assert.equal(calls, 4);
+  assert.equal(result.code, "TOOL_LIMIT"); assert.equal(companyCalls, CHAT_MAX_TOOL_CALLS); assert.equal(calls, CHAT_MAX_TOOL_CALLS + 1);
 });
 
-test("parallel tool calls share the three-execution budget", async () => {
+test("parallel tool calls share the execution budget", async () => {
   let calls = 0, companyCalls = 0;
   const result = await chatWithJob(job, history, settings(), async () => {
     calls++;
     return Response.json({ choices: [{ index: 0, message: { role: "assistant", content: null,
-      tool_calls: Array.from({ length: 5 }, (_, i) => ({ id: "call-" + i, type: "function", function: { name: "get_current_company_stats", arguments: "{}" } })),
+      tool_calls: Array.from({ length: CHAT_MAX_TOOL_CALLS + 2 }, (_, i) => ({ id: "call-" + i, type: "function", function: { name: "get_current_company_stats", arguments: "{}" } })),
     }, finish_reason: "tool_calls" }] });
   }, { loadJob: async () => ({ ok: true, data: job, fetchedAt: 0 }),
     loadCompany: async () => { companyCalls++; return { ok: true, data: company }; } });
-  assert.equal(result.code, "TOOL_LIMIT"); assert.equal(companyCalls, 3); assert.equal(calls, 1);
+  assert.equal(result.code, "TOOL_LIMIT"); assert.equal(companyCalls, CHAT_MAX_TOOL_CALLS); assert.equal(calls, 1);
+});
+
+test("the full sequential tool budget leaves room for the final model answer", async () => {
+  let modelCalls = 0, toolCalls = 0;
+  const result = await chatWithJob(job, history, settings(), async () => {
+    modelCalls++;
+    return modelCalls <= CHAT_MAX_TOOL_CALLS
+      ? toolReply("get_current_company_stats", "round-" + modelCalls) : textReply("Analiz tamamlandı.");
+  }, {
+    loadJob: async () => ({ ok: true, data: job, fetchedAt: 0 }),
+    loadCompany: async () => { toolCalls++; return { ok: true, data: company }; },
+  });
+  assert.deepEqual(result, { ok: true, reply: "Analiz tamamlandı." });
+  assert.equal(toolCalls, CHAT_MAX_TOOL_CALLS);
+  assert.equal(modelCalls, CHAT_MAX_TOOL_CALLS + 1);
 });
 
 test("unsupported tool model errors do not leak provider bodies", async () => {
@@ -178,13 +193,13 @@ test("tool schema rejects model supplied URLs and job IDs", async () => {
   assert.equal(result.ok, true); assert.equal(companyCalls, 0);
 });
 
-test("25-second deadline includes data loading and prevents late model calls", async (t) => {
+test("total deadline includes data loading and prevents late model calls", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let release, modelCalls = 0;
   const result = chatWithJob({}, history, settings(), async () => { modelCalls++; return textReply(); }, {
     loadJob: () => new Promise((resolve) => { release = resolve; }), loadCompany: async () => ({ ok: true, data: company }),
   });
-  t.mock.timers.tick(25000);
+  t.mock.timers.tick(CHAT_TIMEOUT_MS);
   assert.equal((await result).code, "TIMEOUT");
   release({ ok: true, data: job, fetchedAt: 0 });
   await new Promise((resolve) => setImmediate(resolve));
@@ -199,6 +214,33 @@ test("deadline aborts an in-flight model fetch", async (t) => {
     signal = options.signal; ready();
     signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
   }));
-  await started; t.mock.timers.tick(25000);
+  await started; t.mock.timers.tick(CHAT_TIMEOUT_MS);
   assert.equal((await pending).code, "TIMEOUT"); assert.equal(signal.aborted, true);
+});
+
+test("CV list and detail conversation can finish after the former 25-second deadline", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let modelCalls = 0;
+  const tools = [];
+  const result = await chatWithJob(job, [{ role: "user", content: "CV'mi analiz et" }], settings(), async (_, options) => {
+    t.mock.timers.tick(10_000);
+    assert.equal(options.signal.aborted, false);
+    if (++modelCalls === 1) return toolReply("get_resumes", "list");
+    if (modelCalls === 2) return toolReply("get_resume", "detail", { resumeId: "example==!e!" });
+    assert.equal(JSON.parse(JSON.parse(options.body).messages.at(-1).content).data.summary, "CV özeti");
+    return textReply("CV analizi tamamlandı.");
+  }, {
+    loadJob: async () => ({ ok: true, data: job, fetchedAt: 0 }),
+    loadCompany: async () => ({ ok: true, data: company }),
+    callKariyerTool: async (name, input, signal) => {
+      tools.push(name);
+      t.mock.timers.tick(10_000);
+      assert.equal(signal.aborted, false);
+      if (name === "get_resume") assert.equal(input.resumeId, "example==!e!");
+      return { ok: true, data: name === "get_resumes" ? { resumeList: [{ resumeId: "example==!e!" }] } : { summary: "CV özeti" }, truncated: false, methodAssumed: false };
+    },
+  });
+  assert.deepEqual(result, { ok: true, reply: "CV analizi tamamlandı." });
+  assert.deepEqual(tools, ["get_resumes", "get_resume"]);
+  assert.equal(modelCalls, 3);
 });
