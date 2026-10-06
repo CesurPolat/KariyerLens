@@ -944,7 +944,13 @@ Bu GET endpoint'i, önceki `POST /Search/autocomplete` endpoint'inden farklı bi
 
 **Adres:** `https://candidatesearchapigateway.kariyer.net/search`
 
-Başlıklar paylaşılmadı; kimlik doğrulama ve cookie gereksinimleri bilinmiyor.
+Kullanıcının profil sayfası araması için paylaştığı kimlik doğrulama başlığı:
+
+```http
+Authorization: Bearer <TOKEN>
+```
+
+Ek başlıklar ve cookie gereksinimi doğrulanmadı; önceki arama örneklerinin başlıkları paylaşılmamıştı.
 
 ### Anonimleştirilmiş istek gövdesi
 
@@ -1112,6 +1118,59 @@ Alan açıklamaları paylaşılan örnek ve alan adlarından yorumlanmıştır; 
 
 Yanıt `data.jobs.items` üzerinden ayrıştırılmalıdır; mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Arama eşleşme kuralları, sayfalama garantileri, başlıksız/oturumsuz erişim, başarısız/boş yanıtlar, HTTP durumları ve rate-limit davranışı doğrulanmadı.
 
+### Profil sayfasından “Sana Uygun İlanlar” araması
+
+**Kaynak:** Kullanıcının aynı `POST /search` endpoint'i için paylaştığı Bearer token bilgisi, yeni gövde ve ayrı JSON yanıt dosyası. `memberId` anonimleştirilmiştir; paylaşılan istekte sayıdır.
+
+```json
+{
+  "jobProperties": ["1"],
+  "currentPage": 1,
+  "memberId": "<MEMBER_ID>",
+  "isSearchFromProfilePage": true,
+  "size": 12,
+  "dontShowAppliedJobs": true,
+  "dontAddLog": true
+}
+```
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `jobProperties` | String dizisi; bu yanıttaki `filters.jobProperties.items` içinde `1` = `Sana Uygun İlanlar` seçili olarak dönüyor |
+| `isSearchFromProfilePage` | Boolean; profil sayfasından arama bayrağı olarak yorumlandı |
+| `dontShowAppliedJobs` | Boolean; başvurulmuş ilanları gizleme bayrağı olarak yorumlandı |
+| `dontAddLog` | Boolean; arama kaydı eklememe bayrağı olarak yorumlandı; sunucudaki kayıt davranışı ayrıca doğrulanmadı |
+| `currentPage`, `size`, `memberId` | Sayı; sayfa, istenen sonuç sayısı ve üye kimliği |
+
+Bu gövdede `keyword` yoktur. Yanıt yine yukarıda belgelenen `data.jobs.items` ve filtre/meta alanlarını kullanır. Kimlik veya şirket bilgisi içermeyen yanıt özeti:
+
+| Yanıt alanı / ölçüm | Gözlenen değer |
+| --- | --- |
+| `statusCode`, `status` | `Success` |
+| `data.totalJobCount`, `data.totalJobCountWithOutSponsored` | Her ikisi de `177` |
+| `data.jobs.items` uzunluğu | `12` |
+| `isSponsored: true` olan ilan sayısı | `0` |
+| `data.currentPage`, `data.jobs.currentPage` | Her ikisi de `1` |
+| `data.jobSortType` | `SmartSort` |
+| `data.hiddenJobCount` | `0` |
+| `data.isSearched` | `false` |
+| `data.isRecommendationFromJobPreferences` | `false` |
+| `message`, `error` | null |
+
+İlan sonuçları bulunmasına rağmen `isSearched: false` dönüyor; bu bayrak tek başına boş sonuç veya başarısız istek göstergesi olarak kullanılmamalıdır. `Sana Uygun İlanlar` filtresi seçiliyken `isRecommendationFromJobPreferences: false` gözlendiğinden bu iki alan eşdeğer kabul edilmemelidir.
+
+Bu yanıtın `filters.jobProperties.items` seçenekleri:
+
+| Kod | Etiket |
+| --- | --- |
+| `1` | Sana Uygun İlanlar |
+| `2` | Kaydettiğin İlanlar |
+| `3` | Takip Ettiğin Şirketin İlanları |
+| `4` | İncelediğin İlanlar |
+| `5` | Başvurduğum İlanlar |
+
+Bu kod/ad eşleştirmeleri paylaşılan yanıtta doğrudan gözlendi. Bu örneğin toplamları önceki anahtar kelimeli veya çok filtreli aramanın sonucu değildir.
+
 ## İlgili aramalar — `POST /Search/relatedsearch`
 
 **Kaynak:** Kullanıcının paylaştığı URL, POST yöntemi, istek gövdesi ve JSON yanıtı. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi.
@@ -1243,6 +1302,82 @@ CV alanları `result.resumeList[]` altındadır. Açıklamalar alan adları ve p
 
 Yanıt `result.resumeList` üzerinden ayrıştırılmalıdır. Sayısal `statusCode: 200` ve özgeçmiş listesi mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Sayfalama garantileri, boş/başarısız yanıtlar, HTTP durumları ve rate-limit davranışı doğrulanmadı.
 
+## Özgeçmiş görüntülenmeleri — `GET /jb/api/candidates/resumes/view`
+
+**Kaynak:** Kullanıcının paylaştığı URL, GET yöntemi, Bearer token bilgisi ve JSON yanıt dosyası. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi.
+
+```http
+GET https://candidatewebapigw.kariyer.net/jb/api/candidates/resumes/view?skip=0&size=8&ClientType=1
+Authorization: Bearer <TOKEN>
+```
+
+Ek başlıklar ve cookie gereksinimi doğrulanmadı. İstek gövdesi paylaşılmadı. `ClientType` bu örnekte query parametresidir; başlık olarak paylaşılmamıştır.
+
+| Query parametresi | Paylaşılan değer / açıklama |
+| --- | --- |
+| `skip` | `0`; atlanacak kayıt sayısı olarak yorumlandı; hangi listeye uygulandığı doğrulanmadı |
+| `size` | `8`; istenen kayıt sayısı olarak yorumlandı; CV gruplarına mı görüntülenme kayıtlarına mı uygulandığı bilinmiyor |
+| `ClientType` | `1`; istemci türü kodu; diğer değerler ve anlamları bilinmiyor |
+
+### Anonimleştirilmiş ve kısaltılmış yanıt örneği
+
+Yanıtın `result` alanı iki CV grubu içeren bir dizidir. İlk grupta `totalCount: 5` ve beş görüntülenme kaydı, ikinci grupta `totalCount: 3` ve üç kayıt bulunuyor. Kayıtların `viewCount` toplamları sırasıyla altı ve dörttür; `totalCount` toplam görüntülenme sayısıyla aynı değildir.
+
+Aşağıdaki örnek tek CV ve tek kayda indirgenmiş, `totalCount` örnek için `1` yapılmıştır. CV/şirket/ilan kimlikleri, adlar, bağlantılar ve tarihler anonimleştirilmiştir. Sayısal kimlikler yer tutucu için string gösterilir.
+
+```json
+{
+  "version": "1.0",
+  "statusCode": 200,
+  "result": [{
+    "totalCount": 1,
+    "resumeId": "<REDACTED>",
+    "resumeViewList": [{
+      "companyId": "<REDACTED>",
+      "companyName": "Örnek şirket",
+      "companyUrl": "firma-profil/<COMPANY_SLUG>",
+      "clientJobRefNo": "<REDACTED>",
+      "jobName": "Örnek pozisyon",
+      "jobUrl": "/is-ilani/<JOB_SLUG>",
+      "jobActive": false,
+      "viewDate": "02 Ocak 2024",
+      "viewLogo": "",
+      "viewForAvt": false,
+      "viewCount": 1,
+      "jobId": "<JOB_ID>",
+      "companyIdDecrypted": "<COMPANY_ID>",
+      "companyProfileId": "<PROFILE_ID>",
+      "resumeName": "Örnek CV",
+      "viewDateTime": "2024-01-02T15:00:00.183"
+    }]
+  }]
+}
+```
+
+### Yanıtta gözlenen alanlar
+
+Görüntülenme alanları `result[].resumeViewList[]` altındadır. Açıklamalar alan adları ve paylaşılan örneğe dayanır; zorunlulukları doğrulanmadı.
+
+| Alan | Gözlenen tür / açıklama |
+| --- | --- |
+| `version`, `statusCode` | String / sayı; örnekte `1.0` ve `200`; HTTP durum kodu ayrıca paylaşılmadı |
+| `result` | Dizi; CV bazında görüntülenme grupları |
+| `result[].totalCount` | Sayı; CV grubundaki toplam kayıt sayısı olarak yorumlandı; tekil şirket sayısı olduğu doğrulanmadı |
+| `result[].resumeId` | String; kodlanmış/şifrelenmiş CV kimliği |
+| `result[].resumeViewList` | Dizi; görüntülenme kayıtları |
+| `companyId`, `clientJobRefNo` | String; kodlanmış/şifrelenmiş şirket kimliği ve ilan referansı olarak yorumlandı |
+| `companyName`, `jobName`, `resumeName` | String; şirket, ilan/pozisyon ve CV adları |
+| `companyUrl`, `jobUrl` | String; göreli bağlantılar; şirket yolunda başlangıç `/` yok, ilan yolunda var |
+| `jobActive` | Boolean; ilan etkinliği bayrağı olarak yorumlandı |
+| `viewDate` | String; Türkçe görüntülenme tarihi açıklaması |
+| `viewDateTime` | String; örnekte kesirli saniye içeren tarih/saat; saat dilimi belirtilmemiş |
+| `viewLogo` | String; şirket logo adresi olarak yorumlandı; boş olabilir |
+| `viewForAvt` | Boolean; kullanım amacı doğrulanmadı |
+| `viewCount` | Sayı; kayıtla ilişkili görüntülenme sayısı; `1` ve `2` gözlendi |
+| `jobId`, `companyIdDecrypted`, `companyProfileId` | Sayı; ilan, açık şirket ve profil kimlikleri |
+
+Gruplama ve tekrar görüntülemeleri birleştirme kuralları, sıralama garantisi ve sayfalama kapsamı doğrulanmadı. Özgeçmiş görüntülenmesi mülakat veya kabul anlamına gelmez. Bu endpoint'in `result` dizisi, özgeçmiş listesi endpoint'indeki `result.resumeList` nesnesinden farklıdır ve mevcut `/job` ayrıştırıcısıyla uyumlu değildir. Boş/başarısız yanıtlar, HTTP durumları ve rate-limit davranışı bilinmiyor.
+
 ## Şirket sayıları için mevcut veri kaynakları
 
 Uzantının çalışma kodunda bu sayılar için henüz bir JSON endpoint'i kullanılmıyor. Kullanıcının açıklamasına göre `/Search/company` yanıtındaki `data[].occurrence` şirketin açık ilan sayısını verir; bu kaynak henüz çalışma koduna entegre edilmedi.
@@ -1269,5 +1404,6 @@ Profil HTML isteği aynı kaynak üzerinden yapılır. Bu bölüm sayfa entegras
 - `GET /jb/api/search/autocomplete` için başlıklar, `type`/`count` anlamları, kategori ve sonuç sınırları.
 - `POST /Search/relatedsearch` için başlıklar, sonuç sınırları ve boş/başarısız yanıtlar.
 - `/jb/api/candidates/resumes` için HTTP yöntemi, sayfalama, durum/dil kodları ve boş/başarısız yanıtlar.
+- `GET /jb/api/candidates/resumes/view` için sayfalama kapsamı, görüntülenme gruplama kuralları ve boş/başarısız yanıtlar.
 
 Yeni kayıtlar gerçek istekte görülen URL ve alanlarla eklenecek; endpoint adları tahmin edilerek yazılmayacak. Paylaşılan örneklerden Cookie, Authorization, token ve kişisel veriler çıkarılmalıdır.
