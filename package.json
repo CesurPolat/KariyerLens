@@ -26,6 +26,7 @@
     "@langchain/core": "1.2.16",
     "@langchain/openai": "1.6.2",
     "langchain": "1.5.15",
+    "lucide-react": "^1.52.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-markdown": "10.1.0",

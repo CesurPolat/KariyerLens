@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Maximize2, MessageSquareText, Send, Settings, Sparkles, Trash2, X } from "lucide-react";
 import { useJobChat } from "./use-job-chat.js";
 import { MarkdownMessage } from "./MarkdownMessage.js";
 import { useChatResize } from "./use-chat-resize.js";
@@ -38,14 +39,12 @@ export function ChatCard({ jobId }: { jobId: string }) {
     <section id="chat-panel" ref={panel} style={size} role="dialog" aria-label="KariyerLens Asistan" hidden={!open}>
       <button id="resize-chat" type="button" aria-label="Sohbeti boyutlandır" aria-controls="chat-panel"
         title="Boyutlandırmak için sürükle veya ok tuşlarını kullan" {...resizeHandle}>
-        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path d="M3 10V3h7M3 3l10 10" />
-        </svg>
+        <Maximize2 size={16} strokeWidth={1.8} aria-hidden="true" />
       </button>
-      <header><div><h2>✦ KariyerLens Asistan</h2><p>Bu ilan hakkında sorular sor, başvuruna hazırlan.</p></div>
-        <button id="close-chat" ref={closeButton} type="button" aria-label="Sohbeti kapat" onClick={close}>×</button></header>
-      <nav><button id="clear" type="button" onClick={() => clear()}>Sohbeti temizle</button>
-        <button id="settings" type="button" onClick={openSettings}>Ayarlar</button></nav>
+      <header><div><h2><Sparkles size={20} aria-hidden="true" /> KariyerLens Asistan</h2><p>Bu ilan hakkında sorular sor, başvuruna hazırlan.</p></div>
+        <button id="close-chat" ref={closeButton} type="button" aria-label="Sohbeti kapat" onClick={close}><X size={20} aria-hidden="true" /></button></header>
+      <nav><button id="clear" type="button" onClick={() => clear()}><Trash2 size={15} aria-hidden="true" />Sohbeti temizle</button>
+        <button id="settings" type="button" onClick={openSettings}><Settings size={15} aria-hidden="true" />Ayarlar</button></nav>
       <div id="messages" ref={list} role="log" aria-live="polite" aria-label="Sohbet mesajları" aria-busy={pending}
         onScroll={event => { const element = event.currentTarget; followBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48; }}>
         {messages.map((message, index) => <div key={index} className={`message ${message.role}`}>
@@ -66,17 +65,14 @@ export function ChatCard({ jobId }: { jobId: string }) {
             }
           }} />
         <div className="footer"><span>Enter: gönder · Shift+Enter: yeni satır</span>
-          <button id="send" type="submit" disabled={pending}>Gönder</button></div>
+          <button id="send" type="submit" disabled={pending}><Send size={16} aria-hidden="true" />Gönder</button></div>
       </form>
       <div id="status" role="status" className={status.error ? "error" : ""}>{status.text}</div>
     </section>
     <button id="chat-launcher" ref={launcher} type="button" aria-label={open ? "Sohbeti kapat" : "KariyerLens sohbetini aç"}
       aria-expanded={open} aria-controls="chat-panel" title={open ? "Sohbeti kapat" : "KariyerLens Asistan"}
       onClick={() => open ? close() : setOpen(true)}>
-      {open ? <span aria-hidden="true">×</span> : <svg aria-hidden="true" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2V11.5a9.5 9.5 0 1 1 19 0Z" />
-        <path d="M7 10h10M7 14h6" />
-      </svg>}
+      {open ? <X size={26} strokeWidth={1.8} aria-hidden="true" /> : <MessageSquareText size={26} strokeWidth={1.8} aria-hidden="true" />}
     </button>
   </>;
 }

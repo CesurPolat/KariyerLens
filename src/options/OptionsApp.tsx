@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { KeyRound, Save, Sparkles, Trash2 } from "lucide-react";
 import type { ChatSettings, Provider, ProviderSettings } from "../shared/types.js";
 
 type Configs = Record<Provider, ProviderSettings>;
@@ -51,7 +52,7 @@ export function OptionsApp() {
   }
 
   return <main>
-    <h1>✦ KariyerLens Asistan</h1><p>Mesajların, ilan ve araçlarla alınan şirket bilgileri seçtiğin sağlayıcıya gönderilir. {isFree ? "KariyerLens Free için API anahtarı gerekmez." : "Kendi API anahtarını kullan; API kullanımı sağlayıcının tarifesine göre ücretlendirilebilir."}</p>
+    <h1><Sparkles size={26} aria-hidden="true" /> KariyerLens Asistan</h1><p>Mesajların, ilan ve araçlarla alınan şirket bilgileri seçtiğin sağlayıcıya gönderilir. {isFree ? "KariyerLens Free için API anahtarı gerekmez." : "Kendi API anahtarını kullan; API kullanımı sağlayıcının tarifesine göre ücretlendirilebilir."}</p>
     <form id="settings" onSubmit={event => { event.preventDefault(); void persist(); }}>
       <label htmlFor="provider">Sağlayıcı</label>
       <select id="provider" value={provider} disabled={disabled} onChange={event => {
@@ -59,7 +60,7 @@ export function OptionsApp() {
       }}><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option><option value="cesurpolat">KariyerLens Free</option></select>
       {isFree && <p id="proxy-hint">API anahtarı veya model girmene gerek yok. Mesajların, ilan ve şirket bilgileri KariyerLens Free hizmetine gönderilir.</p>}
       {!isFree && <>
-      <label htmlFor="api-key">API anahtarı</label>
+      <label htmlFor="api-key"><KeyRound size={16} aria-hidden="true" />API anahtarı</label>
       <input id="api-key" type="password" autoComplete="off" spellCheck={false} required disabled={disabled}
         value={config.apiKey || ""} onChange={event => update("apiKey", event.target.value)} />
       <label htmlFor="model">Model kimliği</label>
@@ -68,8 +69,8 @@ export function OptionsApp() {
       <p id="model-hint">{provider === "openai" ? "OpenAI hesabında erişebildiğin modelin tam kimliğini gir." : "OpenRouter model kimliğini sağlayıcı/model biçiminde gir."}</p>
       <p>Anahtar yalnız bu bilgisayarda uzantının yerel depolamasında saklanır; şifreli bir kasa değildir. Kariyer.net sayfasına veya sohbet kartına aktarılmaz. Sohbet geçmişi sayfa yenilenince silinir.</p>
       </>}
-      <div className="actions"><button type="submit" disabled={disabled}>{saving ? "Kaydediliyor…" : "Kaydet"}</button>
-        {!isFree && <button id="delete" type="button" disabled={disabled} onClick={() => void persist(true)}>Bu sağlayıcının anahtarını sil</button>}</div>
+      <div className="actions"><button type="submit" disabled={disabled}><Save size={18} aria-hidden="true" />{saving ? "Kaydediliyor…" : "Kaydet"}</button>
+        {!isFree && <button id="delete" type="button" disabled={disabled} onClick={() => void persist(true)}><Trash2 size={18} aria-hidden="true" />Bu sağlayıcının anahtarını sil</button>}</div>
     </form><p id="status" role="status" aria-live="polite">{status}</p>
   </main>;
 }

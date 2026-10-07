@@ -2,12 +2,12 @@
 *{box-sizing:border-box}
 section{width:100%;overflow:hidden;border:1px solid #e9d5ff;background:#fff;box-shadow:0 10px 30px #4c1d951f}
 header{padding:16px 18px;background:linear-gradient(135deg,#6d28d9,#8b5cf6 58%,#a78bfa);color:#fff}
-.brand{display:block;font-size:13px;font-weight:800;letter-spacing:.3px}
+.brand{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;letter-spacing:.3px}
 h2{margin:5px 0 0;font-size:20px;line-height:1.25;color:#f5f3ff}
 .intro{margin:0;padding:16px 18px 4px;color:#475569;font-size:14px;font-weight:600;line-height:20px}
 .chips{display:flex;flex-wrap:nowrap;align-items:center;gap:6px;margin:10px 18px 18px;padding:0 0 5px;overflow-x:auto;scrollbar-width:thin;scrollbar-color:#c4b5fd transparent}
 .chips:focus-visible{outline:2px solid #8b5cf6;outline-offset:4px;border-radius:8px}
-.chip{display:inline-flex;flex:0 0 auto;align-items:center;min-height:30px;padding:5px 9px;border:1px solid;border-radius:8px;font-family:Arial,sans-serif;font-size:12px;font-weight:600;line-height:18px;white-space:nowrap}
+.chip{display:inline-flex;flex:0 0 auto;align-items:center;gap:6px;min-height:30px;padding:5px 9px;border:1px solid;border-radius:8px;font-family:Arial,sans-serif;font-size:12px;font-weight:600;line-height:18px;white-space:nowrap}
 .chip[title]{cursor:help}
 .chip:focus-visible{outline:2px solid #8b5cf6;outline-offset:2px}
 .tone-0{background:#f5f3ff;color:#6d28d9;border-color:#ddd6fe}
@@ -16,10 +16,12 @@ h2{margin:5px 0 0;font-size:20px;line-height:1.25;color:#f5f3ff}
 .tone-3{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}
 .gauge-panel{margin:0 18px 14px;padding:12px 14px;border:1px solid #e2e8f0;border-radius:8px;background:#fff}
 .gauge-header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin-bottom:4px}
-.eyebrow{font-size:10px;letter-spacing:1.5px;color:#64748b}
+.eyebrow{display:inline-flex;align-items:center;gap:6px;font-size:10px;letter-spacing:1.5px;color:#64748b}
 .activity-label{font-size:17px}
 .gauge-content{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:4px}
-svg{display:block;flex:0 1 220px;width:100%;max-width:220px;min-width:0;margin:6px auto 0}
+.gauge-content>svg{display:block;flex:0 1 220px;width:100%;max-width:220px;min-width:0;margin:6px auto 0}
 .gauge-details{flex:1 1 180px;min-width:0;padding:8px 4px 4px}
 .gauge-details p{margin:0;font-size:12px;line-height:17px}
 .gauge-details .note{margin-top:5px;color:#64748b;font-size:10px;line-height:14px}
+
+.lucide{display:block;flex-shrink:0}

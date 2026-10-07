@@ -28,7 +28,7 @@ async function runSummary() {
   summaryCheck(shadow.querySelector(".chips").textContent.includes("İnceleme: 4 gün önce") && shadow.querySelector(".chip:last-child").title.includes("Şirket başvuruları 4 gün önce inceledi."), "Son inceleme kısa etikette gösterilir; özgün metin başlıkta korunur");
   summaryCheck(!document.querySelector('.job-application-view-day'), "Eski inceleme satırı eklenmez");
   summaryCheck(document.querySelector('[data-test="job-application-count"]').textContent.includes("200") && document.querySelector('[data-test="job-application-count"] span').textContent === "başvuru", "Mevcut başvuru alanı ve etiketi korunur");
-  summaryCheck(shadow.querySelector("svg")?.getAttribute("role") === "img", "SVG gösterge erişilebilir biçimde çizilir");
+  summaryCheck(shadow.querySelector(".gauge-content > svg")?.getAttribute("role") === "img", "SVG gösterge erişilebilir biçimde çizilir");
   summaryCheck(shadow.querySelector(".chips").textContent.includes("Yayın:") && shadow.querySelector(".chips").textContent.includes("Sürüm: 1"), "Tarih ve sürüm etiketleri açık yazılır");
   summaryFixture.style.width = "240px";
   await summaryPause();
@@ -44,7 +44,7 @@ async function runSummary() {
   await summaryPause();
   summaryCheck(summaryFixture.querySelectorAll('[data-kariyer-lens-date-info="true"]').length === 1, "İlan değişince kart yinelenmez");
   shadow = summaryShadows.get(summaryHost());
-  summaryCheck(!shadow.querySelector("svg") && shadow.querySelector(".activity-label").textContent === "Veri yetersiz", "Veri eksikse boş gösterge yerine tek durum etiketi gösterilir");
+  summaryCheck(!shadow.querySelector(".gauge-content > svg") && shadow.querySelector(".activity-label").textContent === "Veri yetersiz", "Veri eksikse boş gösterge yerine tek durum etiketi gösterilir");
   summaryCheck(shadow.querySelector(".gauge-details").textContent.includes("başvuru sayısı") && !shadow.querySelector(".gauge-details").textContent.includes("inceleme zamanı"), "Bilinen 15+ gün inceleme bilgisi eksik sayılmaz");
   history.replaceState({}, "", "/tests/job-summary.html");
   await summaryPause();
