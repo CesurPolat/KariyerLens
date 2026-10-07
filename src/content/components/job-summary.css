@@ -19,6 +19,9 @@ h2{margin:5px 0 0;font-size:20px;line-height:1.25;color:#f5f3ff}
 .value-first .chip-label{color:#334155}
 .tone-purple{--card-background:linear-gradient(120deg,#f8f6ff,#f3efff);--card-color:#6331f5;--card-border:#ede7ff;--icon-background:#eee8ff}
 .tone-orange{--card-background:linear-gradient(120deg,#fffbf7,#fff7f0);--card-color:#ec6508;--card-border:#fff0e2;--icon-background:#fff1e3}
+.chip.tone-orange{gap:6px;padding-inline:6px}
+.tone-orange .chip-icon{flex-basis:20px;width:20px}
+.tone-orange .chip-value{white-space:nowrap}
 .tone-orange .chip-label{color:#713f12}
 .tone-blue{--card-background:linear-gradient(120deg,#f6faff,#eff6ff);--card-color:#0877ff;--card-border:#e0edff;--icon-background:#e5f0ff}
 .tone-blue .chip-label{color:#64748b}
