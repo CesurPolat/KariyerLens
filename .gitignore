@@ -2,3 +2,5 @@ node_modules/
 dist/
 *.tsbuildinfo
 .cache/
+brag-output/
+brag-output-*/
