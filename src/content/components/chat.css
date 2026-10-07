@@ -1,4 +1,4 @@
-:host{font-family:Arial,sans-serif;color:#0f172a;color-scheme:light}*{box-sizing:border-box}
+:host{font-family:"Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;color:#0f172a;color-scheme:light}*{box-sizing:border-box}
 #chat-panel{width:min(380px,calc(100vw - 32px));height:min(640px,calc(100dvh - 110px));max-height:calc(100vh - 110px);display:flex;flex-direction:column;border:1px solid #e9d5ff;border-radius:18px;background:#fff;overflow:hidden;box-shadow:0 16px 48px #4c1d9530;margin-bottom:12px;animation:chat-open .18s ease-out}
 #chat-panel[hidden]{display:none}
 #chat-panel{position:relative;max-width:calc(100vw - 32px)}
@@ -20,3 +20,5 @@ form{padding:12px 14px;border-top:1px solid #f1e8ff;flex-shrink:0}textarea{displ
 @keyframes chat-open{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @media(max-height:600px){#chat-panel{height:calc(100dvh - 100px);max-height:calc(100vh - 100px)}header{padding:10px 14px}header p,.footer span{display:none}#suggestions{display:none}textarea{height:52px}#status{max-height:48px;font-size:11px}nav{padding:6px 14px}}
 @media(prefers-reduced-motion:reduce){#chat-panel,.thinking-dots i{animation:none}#chat-launcher{transition:none}}
+
+#chat-panel,#chat-launcher{font-family:"Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif}

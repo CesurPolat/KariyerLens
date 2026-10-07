@@ -48,7 +48,9 @@ export function JobSummary({ job }: { job: Job }) {
   const externalApplication = /kariyer\s*\.\s*net\s+dışında/i.test(reviewText || "");
   const reviewLabel = reviewText
     ?.replace(/^Şirket başvuruları\s+/i, "")
-    .replace(/\s+inceledi\.?$/, "");
+    .replace(/\s+inceledi\.?$/, "")
+    .trim()
+    .replace(/^./u, letter => letter.toLocaleUpperCase("tr-TR"));
   const published = job.publishedAt ? new Date(job.publishedAt) : null;
   const publishedLabel = published && !Number.isNaN(published.getTime())
     ? new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Istanbul" }).format(published)
@@ -56,11 +58,12 @@ export function JobSummary({ job }: { job: Job }) {
   const months: Record<string, string> = { Ocak: "Oca", Şubat: "Şub", Mart: "Mar", Nisan: "Nis", Mayıs: "May", Haziran: "Haz", Temmuz: "Tem", Ağustos: "Ağu", Eylül: "Eyl", Ekim: "Eki", Kasım: "Kas", Aralık: "Ara" };
   const closingLabel = job.closingDate?.replace(/(Ocak|Şubat|Mart|Nisan|Mayıs|Haziran|Temmuz|Ağustos|Eylül|Ekim|Kasım|Aralık)/g, month => months[month]) || "—";
   const dateText = job.jobDateText?.match(/^(.*?)\s+(yayınlandı|yayımlandı|güncellendi)\.?$/i);
+  const isUpdated = dateText?.[2].toLocaleLowerCase("tr-TR") === "güncellendi";
   const details = [
     { icon: CalendarDays, label: "Yayın tarihi", value: publishedLabel, tone: "purple", emphasis: false, tooltip: job.publishedAt ? "İlanın Kariyer.net tarafından bildirilen yayın tarihi." : "Bu ilan için yayın tarihi paylaşılmamış." },
     { icon: Clock, label: "Kapanış Tarihi", value: closingLabel, tone: "orange", emphasis: false, tooltip: job.closingDate ? "İlanda belirtilen son başvuru tarihi. İlan daha erken kapanabilir." : "Bu ilan için son başvuru tarihi paylaşılmamış." },
     ...(job.updateCount ? [{ icon: FileText, label: "İlan sürümü", value: job.updateCount, tone: "blue", emphasis: false, tooltip: "Kariyer.net'in ilan için bildirdiği sürüm numarası. İçerikte kaç değişiklik yapıldığını göstermez." }] : []),
-    ...(job.jobDateText ? [{ icon: dateText?.[2].toLocaleLowerCase("tr-TR") === "güncellendi" ? History : CalendarDays, label: dateText?.[2] || "İlan zamanı", value: dateText?.[1] || job.jobDateText, tone: "green", emphasis: !!dateText, tooltip: "Kariyer.net'in ilanın yayınlanması veya son güncellenmesi için gösterdiği süre. Başvuruların incelendiği zamanı belirtmez." }] : []),
+    ...(job.jobDateText ? [{ icon: isUpdated ? History : CalendarDays, label: dateText ? isUpdated ? "Son güncelleme" : "Yayın zamanı" : "İlan zamanı", value: dateText?.[1] || job.jobDateText, tone: "green", emphasis: false, tooltip: "Kariyer.net'in ilanın yayınlanması veya son güncellenmesi için gösterdiği süre. Başvuruların incelendiği zamanı belirtmez." }] : []),
     ...(reviewLabel && !externalApplication ? [{ icon: Eye, label: "Son inceleme", value: reviewLabel, tone: "purple", emphasis: false, tooltip: `${job.applicationReviewText} Şirketin bu ilana gelen başvuruları en son ne zaman incelediğini belirtir; sizin başvurunuzun incelendiği anlamına gelmez.` }] : []),
   ];
   return <><style>{styles}</style>
