@@ -25,11 +25,11 @@ async function runSummary() {
   let host = summaryHost(), shadow = summaryShadows.get(host);
   summaryCheck(!!shadow?.querySelector("section"), "İlan özeti React ile kapalı Shadow DOM içinde çizilir");
   summaryCheck(host.previousElementSibling.className === "job-features", "Özet doğru konuma yerleşir");
-  summaryCheck(shadow.querySelector(".chips").textContent.includes("İnceleme: 4 gün önce") && shadow.querySelector(".chip:last-child").title.includes("Şirket başvuruları 4 gün önce inceledi."), "Son inceleme kısa etikette gösterilir; özgün metin başlıkta korunur");
+  summaryCheck(shadow.querySelector(".chip:last-child .chip-label").textContent === "Son inceleme" && shadow.querySelector(".chip:last-child .chip-value").textContent === "4 gün önce" && shadow.querySelector(".chip:last-child").title.includes("Şirket başvuruları 4 gün önce inceledi."), "Son inceleme kısa etikette gösterilir; özgün metin başlıkta korunur");
   summaryCheck(!document.querySelector('.job-application-view-day'), "Eski inceleme satırı eklenmez");
   summaryCheck(document.querySelector('[data-test="job-application-count"]').textContent.includes("200") && document.querySelector('[data-test="job-application-count"] span').textContent === "başvuru", "Mevcut başvuru alanı ve etiketi korunur");
   summaryCheck(shadow.querySelector(".gauge-content > svg")?.getAttribute("role") === "img", "SVG gösterge erişilebilir biçimde çizilir");
-  summaryCheck(shadow.querySelector(".chips").textContent.includes("Yayın:") && shadow.querySelector(".chips").textContent.includes("Sürüm: 1"), "Tarih ve sürüm etiketleri açık yazılır");
+  summaryCheck(shadow.querySelector(".chips").textContent.includes("Yayın tarihi") && shadow.querySelector(".tone-blue .chip-value").textContent === "1", "Tarih ve sürüm etiketleri açık yazılır");
   summaryFixture.style.width = "240px";
   await summaryPause();
   summaryCheck(shadow.querySelector("section").scrollWidth <= 240, "İlan özeti dar sütunda taşmaz");

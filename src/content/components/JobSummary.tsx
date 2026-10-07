@@ -1,13 +1,14 @@
 // Import individual modules because the classic content script preserves unused declarations.
 import Activity from "lucide-react/dist/esm/icons/activity.mjs";
-import CalendarClock from "lucide-react/dist/esm/icons/calendar-clock.mjs";
+import Clock from "lucide-react/dist/esm/icons/clock.mjs";
 import CalendarDays from "lucide-react/dist/esm/icons/calendar-days.mjs";
-import Clock3 from "lucide-react/dist/esm/icons/clock-3.mjs";
-import FileSearch from "lucide-react/dist/esm/icons/file-search.mjs";
+import Eye from "lucide-react/dist/esm/icons/eye.mjs";
+import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
 import History from "lucide-react/dist/esm/icons/history.mjs";
 import Sparkles from "lucide-react/dist/esm/icons/sparkles.mjs";
+import TriangleAlert from "lucide-react/dist/esm/icons/triangle-alert.mjs";
 import type { Job } from "../../shared/types.js";
-import { formatPublishedAt, shortDate, getApplicationInsight, getHiringActivity } from "../job-insights.js";
+import { getApplicationInsight, getHiringActivity } from "../job-insights.js";
 import styles from "./job-summary.css?inline";
 
 type HiringActivity = ReturnType<typeof getHiringActivity>;
@@ -43,23 +44,42 @@ function HiringGauge({ activity }: { activity: HiringActivity }) {
 
 export function JobSummary({ job }: { job: Job }) {
   const activity = getHiringActivity(job, getApplicationInsight(job));
-  const reviewLabel = job.applicationReviewText
-    ?.replace(/^Şirket başvuruları\s+/i, "İnceleme: ")
+  const reviewText = job.applicationReviewText?.replace(/\*\*/g, "").trim();
+  const externalApplication = /kariyer\s*\.\s*net\s+dışında/i.test(reviewText || "");
+  const reviewLabel = reviewText
+    ?.replace(/^Şirket başvuruları\s+/i, "")
     .replace(/\s+inceledi\.?$/, "");
+  const published = job.publishedAt ? new Date(job.publishedAt) : null;
+  const publishedLabel = published && !Number.isNaN(published.getTime())
+    ? new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Istanbul" }).format(published)
+    : job.publishedAt || "—";
+  const months: Record<string, string> = { Ocak: "Oca", Şubat: "Şub", Mart: "Mar", Nisan: "Nis", Mayıs: "May", Haziran: "Haz", Temmuz: "Tem", Ağustos: "Ağu", Eylül: "Eyl", Ekim: "Eki", Kasım: "Kas", Aralık: "Ara" };
+  const closingLabel = job.closingDate?.replace(/(Ocak|Şubat|Mart|Nisan|Mayıs|Haziran|Temmuz|Ağustos|Eylül|Ekim|Kasım|Aralık)/g, month => months[month]) || "—";
+  const dateText = job.jobDateText?.match(/^(.*?)\s+(yayınlandı|yayımlandı|güncellendi)\.?$/i);
   const details = [
-    { icon: CalendarDays, label: `Yayın: ${formatPublishedAt(job.publishedAt)}`, tooltip: job.publishedAt ? "İlanın Kariyer.net tarafından bildirilen yayın tarihi." : "Bu ilan için yayın tarihi paylaşılmamış." },
-    { icon: CalendarClock, label: `Son başvuru: ${shortDate(job.closingDate)}`, tooltip: job.closingDate ? "İlanda belirtilen son başvuru tarihi. İlan daha erken kapanabilir." : "Bu ilan için son başvuru tarihi paylaşılmamış." },
-    ...(job.updateCount ? [{ icon: History, label: `Sürüm: ${job.updateCount}`, tooltip: "Kariyer.net'in ilan için bildirdiği sürüm numarası. İçerikte kaç değişiklik yapıldığını göstermez." }] : []),
-    ...(job.jobDateText ? [{ icon: Clock3, label: job.jobDateText, tooltip: "Kariyer.net'in ilanın yayınlanması veya son güncellenmesi için gösterdiği süre. Başvuruların incelendiği zamanı belirtmez." }] : []),
-    ...(reviewLabel ? [{ icon: FileSearch, label: reviewLabel, tooltip: `${job.applicationReviewText} Şirketin bu ilana gelen başvuruları en son ne zaman incelediğini belirtir; sizin başvurunuzun incelendiği anlamına gelmez.` }] : []),
+    { icon: CalendarDays, label: "Yayın tarihi", value: publishedLabel, tone: "purple", emphasis: false, tooltip: job.publishedAt ? "İlanın Kariyer.net tarafından bildirilen yayın tarihi." : "Bu ilan için yayın tarihi paylaşılmamış." },
+    { icon: Clock, label: "Kapanış Tarihi", value: closingLabel, tone: "orange", emphasis: false, tooltip: job.closingDate ? "İlanda belirtilen son başvuru tarihi. İlan daha erken kapanabilir." : "Bu ilan için son başvuru tarihi paylaşılmamış." },
+    ...(job.updateCount ? [{ icon: FileText, label: "İlan sürümü", value: job.updateCount, tone: "blue", emphasis: false, tooltip: "Kariyer.net'in ilan için bildirdiği sürüm numarası. İçerikte kaç değişiklik yapıldığını göstermez." }] : []),
+    ...(job.jobDateText ? [{ icon: dateText?.[2].toLocaleLowerCase("tr-TR") === "güncellendi" ? History : CalendarDays, label: dateText?.[2] || "İlan zamanı", value: dateText?.[1] || job.jobDateText, tone: "green", emphasis: !!dateText, tooltip: "Kariyer.net'in ilanın yayınlanması veya son güncellenmesi için gösterdiği süre. Başvuruların incelendiği zamanı belirtmez." }] : []),
+    ...(reviewLabel && !externalApplication ? [{ icon: Eye, label: "Son inceleme", value: reviewLabel, tone: "purple", emphasis: false, tooltip: `${job.applicationReviewText} Şirketin bu ilana gelen başvuruları en son ne zaman incelediğini belirtir; sizin başvurunuzun incelendiği anlamına gelmez.` }] : []),
   ];
   return <><style>{styles}</style>
     <section aria-label="KariyerLens ilan özeti">
       <header><span className="brand"><Sparkles size={16} aria-hidden="true" /> KariyerLens</span><h2>İlan özeti</h2></header>
       <p className="intro">İlan tarihleri ve başvuru inceleme durumu</p>
       <div className="chips" tabIndex={0} role="region" aria-label="İlan bilgileri">
-        {details.map((detail, index) => <span key={index} title={detail.tooltip} aria-description={detail.tooltip} tabIndex={0} className={`chip tone-${index % 4}`}><detail.icon size={14} aria-hidden="true" />{detail.label}</span>)}
+        {details.map((detail, index) => <div key={index} title={detail.tooltip} aria-description={detail.tooltip} tabIndex={0} className={`chip tone-${detail.tone}${detail.emphasis ? " value-first" : ""}`}>
+          <span className="chip-icon"><detail.icon size={24} strokeWidth={2} aria-hidden="true" /></span>
+          <div className="chip-copy">{detail.emphasis
+            ? <><strong className="chip-value">{detail.value}</strong><span className="chip-label">{detail.label}</span></>
+            : <><span className="chip-label">{detail.label}</span><strong className="chip-value">{detail.value}</strong></>}
+          </div>
+        </div>)}
       </div>
+      {externalApplication && <div className="application-warning" role="note" aria-label="Başvuru süreci uyarısı">
+        <TriangleAlert size={18} aria-hidden="true" />
+        <span>{reviewText}</span>
+      </div>}
       <HiringGauge activity={activity} />
     </section>
   </>;
