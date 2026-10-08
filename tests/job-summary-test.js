@@ -7,7 +7,7 @@ Element.prototype.attachShadow = function (options) {
   return shadow;
 };
 let summaryApiCalls = 0;
-const summaryJob = id => ({ id, title: "Örnek ilan", publishedAt: new Date().toISOString(), closingDate: "28 Ekim", jobDateText: "2 saat önce güncellendi", updateCount: "1", applicationReviewText: "Şirket başvuruları 4 gün önce inceledi.", applicationCount: "200", position: "ERP Uzmanı", sector: [], workAreas: [], education: [], languages: [], isActive: true, isEasyApply: false });
+const summaryJob = id => ({ id, title: "Örnek ilan", publishedAt: new Date(Date.now() - 7 * 86_400_000).toISOString(), closingDate: "28 Ekim", jobDateText: "2 saat önce güncellendi", updateCount: "1", applicationReviewText: "Şirket başvuruları 4 gün önce inceledi.", applicationCount: "200", position: "ERP Uzmanı", sector: [], workAreas: [], education: [], languages: [], isActive: true, isEasyApply: false });
 window.chrome = { runtime: { sendMessage: async ({ jobId }) => {
   summaryApiCalls++;
   const data = summaryJob(jobId);
@@ -44,6 +44,7 @@ async function runSummary() {
   await summaryPause();
   summaryCheck(summaryFixture.querySelectorAll('[data-kariyer-lens-date-info="true"]').length === 1, "İlan değişince kart yinelenmez");
   shadow = summaryShadows.get(summaryHost());
+  summaryCheck(shadow.querySelector(".chip:last-child .chip-value").textContent === "İncelenmedi" && shadow.querySelector(".chip:last-child").title.includes("15+ gün"), "Yayın tarihinden eski inceleme süresi açıklanır; özgün bilgi başlıkta korunur");
   summaryCheck(!shadow.querySelector(".gauge-content > svg") && shadow.querySelector(".activity-label").textContent === "Veri yetersiz", "Veri eksikse boş gösterge yerine tek durum etiketi gösterilir");
   summaryCheck(shadow.querySelector(".gauge-details").textContent.includes("başvuru sayısı") && !shadow.querySelector(".gauge-details").textContent.includes("inceleme zamanı"), "Bilinen 15+ gün inceleme bilgisi eksik sayılmaz");
   history.replaceState({}, "", "/tests/job-summary.html");

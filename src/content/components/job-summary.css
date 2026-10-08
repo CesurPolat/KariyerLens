@@ -12,16 +12,20 @@ h2{margin:5px 0 0;font-size:20px;line-height:1.25;color:#f5f3ff}
 .chip:focus-visible{outline:2px solid #8b5cf6;outline-offset:2px}
 .chip-icon{display:flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:28px;border-radius:9px;background:var(--icon-background)}
 .chip-icon .lucide{width:18px;height:18px}
-.chip-copy{display:flex;flex-direction:column;gap:3px;min-width:0;overflow-wrap:anywhere}
+.chip-copy{display:flex;flex-direction:column;gap:3px;min-width:0;overflow-wrap:normal}
 .chip-label{font-size:11px;font-weight:400;line-height:15px}
 .chip-value{font-size:14px;font-weight:700;line-height:18px;color:#0f172a}
 .value-first .chip-value{color:var(--card-color)}
 .value-first .chip-label{color:#334155}
 .tone-purple{--card-background:linear-gradient(120deg,#f8f6ff,#f3efff);--card-color:#6331f5;--card-border:#ede7ff;--icon-background:#eee8ff}
 .tone-orange{--card-background:linear-gradient(120deg,#fffbf7,#fff7f0);--card-color:#ec6508;--card-border:#fff0e2;--icon-background:#fff1e3}
-.chip.tone-orange{gap:6px;padding-inline:6px}
-.tone-orange .chip-icon{flex-basis:20px;width:20px}
-.tone-orange .chip-value{white-space:nowrap}
+/* TODO: Kartların dar genişlikte tek satıra sığmasını ortak bir düzenle ele al.
+   Son güncelleme için ikon alanı 28px → 20px, ikon-metin arası 8px → 6px,
+   yatay iç boşluk 8px → 6px yapıldı; değer nowrap ile tek satırda tutuluyor.
+   Yazı boyutu değişmedi. Daha uzun süre metinlerinde taşmayı kontrol et. */
+.chip.tone-orange,.chip.tone-green{gap:6px;padding-inline:6px}
+.tone-orange .chip-icon,.tone-green .chip-icon{flex-basis:20px;width:20px}
+.tone-orange .chip-value,.tone-green .chip-value{white-space:nowrap}
 .tone-orange .chip-label{color:#713f12}
 .tone-blue{--card-background:linear-gradient(120deg,#f6faff,#eff6ff);--card-color:#0877ff;--card-border:#e0edff;--icon-background:#e5f0ff}
 .tone-blue .chip-label{color:#64748b}
@@ -40,3 +44,7 @@ h2{margin:5px 0 0;font-size:20px;line-height:1.25;color:#f5f3ff}
 .gauge-details .note{margin-top:5px;color:#64748b;font-size:10px;line-height:14px}
 
 .lucide{display:block;flex-shrink:0}
+
+.chip-review{gap:6px;padding-inline:6px}
+.chip-review .chip-icon{flex-basis:20px;width:20px}
+.chip-review .chip-value{white-space:nowrap}
