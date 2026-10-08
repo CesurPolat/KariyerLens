@@ -1,3 +1,4 @@
+import { recordJobVisit } from "./job-visit-history.js";
 import { getJob, validateJobId } from "./kariyer-api.js";
 import { chatWithJob, validateMessages } from "./chat-api.js";
 import type { ChatStreamOptions } from "./chat-api.js";
@@ -63,6 +64,17 @@ async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.M
   const jobId = validateJobId(message.jobId);
   if (!jobId) return { ok: false, code: "INVALID_JOB_ID", message: "Geçerli bir ilan bulunamadı." };
   if (message.type === MESSAGE_TYPES.GET_JOB) return loadJob(jobId);
+  if (message.type === MESSAGE_TYPES.GET_JOB_VISIT) {
+    const result = await getJob(jobId);
+    if (!result.ok) return result;
+    const existing = cache.get(jobId);
+    if (!existing || existing.fetchedAt <= result.fetchedAt) cache.set(jobId, result);
+    try { await storageReady; } catch {
+      return { ...result, history: { measurements: [], status: "unavailable" } };
+    }
+    const history = await recordJobVisit(jobId, result.data.applicationCount, result.fetchedAt);
+    return { ...result, history };
+  }
   if (!validateMessages(message.messages)) return { ok: false, code: "INVALID_MESSAGES", message: "Mesajlar geçersiz veya çok uzun." };
   await storageReady;
   const { chatSettings } = await chrome.storage.local.get<{ chatSettings?: ChatSettings }>("chatSettings");
@@ -76,7 +88,7 @@ async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.M
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (sender.id !== chrome.runtime.id || ![MESSAGE_TYPES.GET_JOB, MESSAGE_TYPES.CHAT_JOB, MESSAGE_TYPES.OPEN_OPTIONS].includes(message?.type)) return;
+  if (sender.id !== chrome.runtime.id || ![MESSAGE_TYPES.GET_JOB, MESSAGE_TYPES.GET_JOB_VISIT, MESSAGE_TYPES.CHAT_JOB, MESSAGE_TYPES.OPEN_OPTIONS].includes(message?.type)) return;
   if (sender.tab && !/^https:\/\/(?:[\w-]+\.)*kariyer\.net\//i.test(sender.url || "")) return;
   handleMessage(message, sender).then(sendResponse).catch(() => sendResponse({ ok: false, code: "INTERNAL_ERROR", message: "İstek tamamlanamadı. Uzantıyı yeniden yükleyip deneyin." }));
   return true;

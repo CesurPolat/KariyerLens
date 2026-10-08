@@ -30,16 +30,14 @@ test("built content scripts retain shared navigation helpers", async () => {
   const scope = vm.createContext({
     location: { href: "https://www.kariyer.net/is-ilani/test-123" },
     URL, history: { pushState() {}, replaceState() {} },
-    addEventListener() {}, queueMicrotask() {},
+    addEventListener() {}, queueMicrotask() {}, clearTimeout() {},
+    document: { querySelectorAll: () => [] },
     chrome: { runtime: { sendMessage: async () => ({ ok: false }) } },
   });
   const source = await readFile(new URL("src/content/content-script.js", dist), "utf8");
   vm.runInContext(source, scope);
   assert.equal(vm.runInContext("findJobId()", scope), "123");
   assert.equal(vm.runInContext("typeof loadCurrentJob", scope), "function");
-  assert.equal(vm.runInContext("lastRequestedJobId", scope), "123");
-  vm.runInContext('lastRequestedJobId = ""', scope);
-  assert.equal(vm.runInContext("lastRequestedJobId", scope), "");
 });
 
 test("MV3 background runs a tool conversation without Node globals or dynamic code", async () => {

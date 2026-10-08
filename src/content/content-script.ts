@@ -1,15 +1,17 @@
-import type { Job, JobResult } from "../shared/types.js";
+import type { JobVisitResult } from "../shared/types.js";
 
-import { showJobSummary } from "./mount-job-summary.js";
+import { clearJobSummary, showJobSummary } from "./mount-job-summary.js";
 
-const GET_JOB = "GET_JOB";
-const APPLICATION_COUNT_SELECTOR = '[data-test="job-application-count"]';
+import { clearApplicationCount, showApplicationCount } from "./mount-application-count.js";
+import { MESSAGE_TYPES } from "../shared/messages.js";
 const JOB_FEATURE_LIST_SELECTOR = '[data-test="job-feature-list"]';
 const JOB_DETAIL_MAIN_SELECTOR = ".job-detail-body-main";
 const NATIVE_SYNC_TIMEOUT_MS = 8_000;
 
-let lastRequestedJobId = "";
-let nativeCountObserver: MutationObserver | undefined;
+let activeVisitJobId = "";
+let visitGeneration = 0;
+let positionObserver: MutationObserver | undefined;
+let positionTimeout: ReturnType<typeof setTimeout> | undefined;
 
 function findJobId() {
   const url = new URL(location.href);
@@ -20,36 +22,6 @@ function findJobId() {
     url.pathname.match(/(\d{3,16})(?:\/)?$/)?.[1],
   ];
   return candidates.find((value) => /^\d{1,16}$/.test(value || "")) || "";
-}
-
-function updateNativeApplicationCount(applicationCount?: string) {
-  if (!applicationCount) return false;
-  const countElement = document.querySelector<HTMLElement>(APPLICATION_COUNT_SELECTOR);
-  if (!countElement) return false;
-
-  // Keep the nested "başvuru" label; replace only its numeric sibling.
-  const textNode = [...countElement.childNodes].find(
-    (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
-  );
-  if (textNode) {
-    textNode.textContent = ` ${applicationCount} `;
-  } else {
-    countElement.prepend(document.createTextNode(` ${applicationCount} `));
-  }
-  countElement.dataset.kariyerLensUpdated = "true";
-  return true;
-}
-
-function syncNativeApplicationCount(applicationCount?: string) {
-  nativeCountObserver?.disconnect();
-  if (updateNativeApplicationCount(applicationCount)) return;
-
-  // The target node can be rendered after the API response in this SPA.
-  nativeCountObserver = new MutationObserver(() => {
-    if (updateNativeApplicationCount(applicationCount)) nativeCountObserver?.disconnect();
-  });
-  nativeCountObserver.observe(document.documentElement, { childList: true, subtree: true });
-  setTimeout(() => nativeCountObserver?.disconnect(), NATIVE_SYNC_TIMEOUT_MS);
 }
 
 function updateNativePositionFeature(position?: string) {
@@ -76,36 +48,42 @@ function updateNativePositionFeature(position?: string) {
   return true;
 }
 
-function syncNativePositionFeature(position?: string) {
-  if (updateNativePositionFeature(position)) return;
-  const observer = new MutationObserver(() => {
-    if (updateNativePositionFeature(position)) observer.disconnect();
+function syncNativePositionFeature(position: string | undefined, generation: number) {
+  if (updateNativePositionFeature(position) || !position) return;
+  positionObserver = new MutationObserver(() => {
+    if (generation !== visitGeneration || updateNativePositionFeature(position)) positionObserver?.disconnect();
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-  setTimeout(() => observer.disconnect(), NATIVE_SYNC_TIMEOUT_MS);
+  positionObserver.observe(document.documentElement, { childList: true, subtree: true });
+  positionTimeout = setTimeout(() => positionObserver?.disconnect(), NATIVE_SYNC_TIMEOUT_MS);
 }
 
 async function loadCurrentJob() {
   const jobId = findJobId();
-  if (!jobId || jobId === lastRequestedJobId) return;
-  lastRequestedJobId = jobId;
+  if (jobId === activeVisitJobId) return;
+  activeVisitJobId = jobId;
+  const generation = ++visitGeneration;
+  positionObserver?.disconnect();
+  clearTimeout(positionTimeout);
+  clearApplicationCount();
+  clearJobSummary();
+  document.querySelectorAll('[data-kariyer-lens-feature="position"]').forEach(element => element.remove());
+  if (!jobId) return;
 
   try {
-    const response: JobResult = await chrome.runtime.sendMessage({ type: GET_JOB, jobId });
-    if (response?.ok && findJobId() === jobId) {
-      syncNativeApplicationCount(response.data.applicationCount);
+    const response: JobVisitResult = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.GET_JOB_VISIT, jobId });
+    if (response?.ok && findJobId() === jobId && generation === visitGeneration) {
+      showApplicationCount(response, findJobId);
       showJobSummary(response.data, findJobId);
-      syncNativePositionFeature(response.data.position);
+      syncNativePositionFeature(response.data.position, generation);
     }
   } catch {
-    // No extension UI: leave the native page unchanged when the request fails.
+    // Leave the native page unchanged when the request fails.
   }
 }
 
 function watchClientSideNavigation() {
   const requestAfterNavigation = () => {
-    lastRequestedJobId = "";
-    queueMicrotask(loadCurrentJob);
+    void loadCurrentJob();
   };
   for (const method of ["pushState", "replaceState"] as const) {
     const original = history[method];

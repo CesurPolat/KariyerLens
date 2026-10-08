@@ -1,0 +1,91 @@
+// Local mock data only. Never contacts Kariyer.net or an AI provider.
+const countShadows = new WeakMap();
+const countAttachShadow = Element.prototype.attachShadow;
+Element.prototype.attachShadow = function(options) { const shadow = countAttachShadow.call(this, options); countShadows.set(this, shadow); return shadow; };
+const visitHistories = new Map();
+let countApiCalls = 0, first123 = true, late777, first777 = true;
+const mockJob = (id, applicationCount) => ({ id, applicationCount, title: "Örnek ilan", sector: [], workAreas: [], education: [], languages: [], isActive: true, isEasyApply: false });
+const mockResponse = (jobId, count) => {
+  const timestamp = Date.now(), previous = visitHistories.get(jobId) || [];
+  const unchanged = previous.at(-1)?.count === count;
+  const measurements = unchanged ? previous : [...previous, { timestamp, count }]; visitHistories.set(jobId, measurements);
+  return { ok: true, data: mockJob(jobId, String(count)), fetchedAt: timestamp, history: { status: unchanged ? "unchanged" : "saved", measurements } };
+};
+window.chrome = { runtime: { sendMessage: async ({ type, jobId }) => {
+  if (type !== "GET_JOB_VISIT") throw Error("Expected visit message");
+  countApiCalls++;
+  if (jobId === "999") return { ok: false };
+  if (jobId === "777" && first777) { first777 = false; return new Promise(resolve => { late777 = () => resolve(mockResponse(jobId, 300)); }); }
+  if (jobId === "1001") return { ok: true, data: mockJob(jobId, "25"), fetchedAt: Date.now(), history: { status: "unavailable", measurements: [] } };
+  if (jobId === "1002") return { ok: true, data: mockJob(jobId, "100+"), fetchedAt: Date.now(), history: { status: "invalid-count", measurements: [] } };
+  if (jobId === "1011") { visitHistories.set(jobId, [{ timestamp: Date.now() - 10000, count: 40 }]); return mockResponse(jobId, 20); }
+  let count = jobId === "123" ? first123 ? 120 : 145 : jobId === "777" ? 350 : jobId === "1000" ? 0 : 50;
+  if (jobId === "123") first123 = false;
+  return mockResponse(jobId, count);
+} } };
+const countPause = () => new Promise(resolve => setTimeout(resolve, 100));
+const countHost = () => document.querySelector('[data-kariyer-lens-application-count="true"]');
+const countShadow = () => countShadows.get(countHost());
+const results = document.querySelector("#results");
+function countCheck(condition, message) { if (!condition) throw Error(message); results.textContent += "\n✓ " + message; }
+const visit = async id => { history.pushState({}, "", "?jobId=" + id); await countPause(); };
+async function runCountTests() {
+  await visit("123");
+  countCheck(countApiCalls === 1, "İlk açılış yalnız bir ziyaret üretir");
+  let shadow = countShadow(), button = shadow.querySelector('.count-button');
+  countCheck(button.textContent.includes("120") && document.querySelector('[data-test="job-application-count"]').style.display === "none", "React sayaç görünür; özgün sayı çift görünmez");
+  button.click(); await countPause();
+  countCheck(shadow.querySelectorAll('.point').length === 1 && shadow.textContent.includes("Karşılaştırma için"), "İlk ziyarette tek nokta ve açıklama görünür");
+  shadow.querySelector('.history-panel').dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true })); await countPause();
+  countCheck(!!shadow.querySelector('[role="dialog"]'), "Shadow DOM içindeki tıklama dış tıklama sayılmaz");
+  const calls = countApiCalls;
+  history.replaceState({}, "", "?jobId=123&view=detail"); await countPause();
+  countCheck(countApiCalls === calls, "İlgisiz URL değişimi yeni ölçüm üretmez");
+  shadow.querySelector('.point').focus(); await countPause();
+  countCheck(shadow.querySelector('.selected').textContent.includes("120 başvuru"), "Grafik noktasına klavyeyle odaklanınca sayı ve zaman görünür");
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await countPause();
+  countCheck(!shadow.querySelector('[role="dialog"]') && shadow.activeElement === button, "Escape paneli kapatır ve odağı sayaca döndürür");
+  button.click(); await countPause();
+  document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true })); await countPause();
+  countCheck(!shadow.querySelector('[role="dialog"]'), "Dışarı tıklama paneli kapatır");
+  const native = document.querySelector('[data-test="job-application-count"]');
+  const parent = native.parentElement; native.remove(); await countPause();
+  countCheck(!countHost() && !native.style.display, "Hedef kaldırılınca React kökü temizlenir ve özgün stil geri gelir");
+  parent.append(native); await countPause();
+  countCheck(!!countHost() && countApiCalls === calls, "Hedef yeniden oluşunca ek kayıt olmadan sayaç geri gelir");
+  await visit("456"); await visit("123");
+  shadow = countShadow(); button = shadow.querySelector('.count-button');
+  countCheck(button.textContent.includes("+25"), "İkinci ziyarette önceki bakışa göre artış gösterilir");
+  button.click(); await countPause();
+  countCheck(shadow.querySelectorAll('.point').length === 2, "İkinci ziyaret zaman grafiğine eklenir");
+  shadow.querySelector('.point').focus(); await countPause();
+  countCheck(shadow.querySelector('.selected').textContent.includes("120 başvuru"), "Önceki ziyaretin ayrıntısı seçilebilir");
+  const rect = shadow.querySelector('.history-panel').getBoundingClientRect();
+  countCheck(rect.left >= 0 && rect.right <= document.documentElement.clientWidth && rect.width <= document.documentElement.clientWidth - 16 && rect.top >= 0 && rect.bottom <= document.documentElement.clientHeight, "Grafik paneli ekranın dışına taşmaz");
+  await visit("777"); await visit("888"); await visit("777");
+  late777(); await countPause();
+  countCheck(countShadow().querySelector('button').textContent.includes("350"), "A-B-A gezinmesinde eski yanıt yeni ziyareti ezmez");
+  await visit("999");
+  countCheck(!countHost() && !native.style.display, "API hatasında özgün alan gösterilir");
+  await visit("1011");
+  countCheck(countShadow().querySelector('button').textContent.includes("−20"), "Başvuru sayısı azaldığında negatif fark gösterilir");
+  await visit("1000");
+  countCheck(countShadow().querySelector('button').textContent.includes("0 başvuru"), "Sıfır başvuru geçerli ölçümdür");
+  native.remove(); await countPause(); const beforeLate = countApiCalls;
+  await visit("1010");
+  countCheck(!countHost(), "Hedef henüz oluşmadığında yanıt bekletilir");
+  parent.append(native); await countPause();
+  countCheck(!!countHost() && countApiCalls === beforeLate + 1, "Geç yüklenen DOM ek istek ve kayıt olmadan doldurulur");
+  await visit("1001"); shadow = countShadow(); shadow.querySelector('button').click(); await countPause();
+  countCheck(shadow.textContent.includes("kaydedilemedi") && shadow.querySelector('.count-button').textContent.includes("25"), "Depolama hatasında güncel sayı ve geçmiş uyarısı görünür");
+  await visit("1002"); shadow = countShadow(); shadow.querySelector('button').click(); await countPause();
+  countCheck(!shadow.querySelector('.point') && shadow.textContent.includes("grafiğe eklenmedi"), "Yaklaşık sayı ölçüm gibi çizilmez");
+  history.pushState({}, "", "/tests/application-count.html"); await countPause();
+  countCheck(!countHost() && !native.style.display, "İlan dışına çıkınca özgün alan geri yüklenir");
+  await visit("123"); native.scrollIntoView(); countShadow().querySelector('button').click(); await countPause();
+  countCheck(countShadow().textContent.includes("Değişmedi"), "Aynı sayıda değişmedi etiketi gösterilir");
+  countCheck(countShadow().querySelectorAll('.point').length === 2, "Aynı sayıda grafiğe tekrar nokta eklenmez");
+  results.textContent += "\nTüm başvuru geçmişi testleri geçti.";
+  window.countTestsDone = true;
+}
+addEventListener("load", () => runCountTests().catch(error => { results.textContent += "\nBAŞARISIZ: " + error.message; window.countTestsDone = true; }));

@@ -18,6 +18,8 @@ function dispose() {
   renderedJob = null;
 }
 
+export function clearJobSummary() { currentJob = null; dispose(); }
+
 function sync() {
   if (!currentJob) return;
   if (getCurrentId() !== currentJob.id) { currentJob = null; dispose(); return; }

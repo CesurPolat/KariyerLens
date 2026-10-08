@@ -12,7 +12,7 @@ window.chrome = { runtime: { sendMessage: async ({ jobId }) => {
   summaryApiCalls++;
   const data = summaryJob(jobId);
   if (jobId === "456") { data.applicationCount = undefined; data.applicationReviewText = "Şirket başvuruları 15+ gün önce inceledi."; }
-  return { ok: true, data, fetchedAt: Date.now() };
+  return { ok: true, data, fetchedAt: Date.now(), history: { status: data.applicationCount ? "saved" : "invalid-count", measurements: data.applicationCount ? [{ timestamp: Date.now(), count: Number(data.applicationCount) }] : [] } };
 } } };
 const summaryPause = () => new Promise(resolve => setTimeout(resolve, 80));
 const summaryResults = document.querySelector("#results");
@@ -27,7 +27,9 @@ async function runSummary() {
   summaryCheck(host.previousElementSibling.className === "job-features", "Özet doğru konuma yerleşir");
   summaryCheck(shadow.querySelector(".chip:last-child .chip-label").textContent === "Son inceleme" && shadow.querySelector(".chip:last-child .chip-value").textContent === "4 gün önce" && shadow.querySelector(".chip:last-child").title.includes("Şirket başvuruları 4 gün önce inceledi."), "Son inceleme kısa etikette gösterilir; özgün metin başlıkta korunur");
   summaryCheck(!document.querySelector('.job-application-view-day'), "Eski inceleme satırı eklenmez");
-  summaryCheck(document.querySelector('[data-test="job-application-count"]').textContent.includes("200") && document.querySelector('[data-test="job-application-count"] span').textContent === "başvuru", "Mevcut başvuru alanı ve etiketi korunur");
+  const countNative = document.querySelector('[data-test="job-application-count"]');
+  const countShadow = summaryShadows.get(document.querySelector('[data-kariyer-lens-application-count="true"]'));
+  summaryCheck(countNative.style.display === "none" && countNative.querySelector('span').textContent === "başvuru" && countShadow.querySelector('button').textContent.includes("200"), "Başvuru sayısı React ile gösterilir; özgün alan gizlenerek korunur");
   summaryCheck(shadow.querySelector(".gauge-content > svg")?.getAttribute("role") === "img", "SVG gösterge erişilebilir biçimde çizilir");
   summaryCheck(shadow.querySelector(".chips").textContent.includes("Yayın tarihi") && shadow.querySelector(".tone-blue .chip-value").textContent === "1", "Tarih ve sürüm etiketleri açık yazılır");
   summaryFixture.style.width = "240px";

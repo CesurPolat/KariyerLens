@@ -58,13 +58,19 @@ export interface JobSuccess {
   cached?: boolean;
 }
 
+export interface JobVisitMeasurement { timestamp: number; count: number }
+export interface JobVisitHistory {
+  measurements: JobVisitMeasurement[];
+  status: "saved" | "unchanged" | "unavailable" | "invalid-count";
+}
+export type JobVisitResult = (JobSuccess & { history: JobVisitHistory }) | Failure;
 export type JobResult = JobSuccess | Failure;
 export type ChatResult = { ok: true; reply: string } | Failure;
 export type ChatProgress = { type: "status"; text: string } | { type: "text"; content: string };
 export type ChatStreamEvent = ChatProgress | { type: "done"; result: ChatResult };
 
 export interface ExtensionMessage {
-  type: "GET_JOB" | "CHAT_JOB" | "OPEN_OPTIONS";
+  type: "GET_JOB_VISIT" | "GET_JOB" | "CHAT_JOB" | "OPEN_OPTIONS";
   jobId?: unknown;
   messages?: unknown;
 }

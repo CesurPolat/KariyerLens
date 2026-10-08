@@ -14,7 +14,6 @@ import { ChatCard } from "./components/ChatCard.js";
     if (jobId !== current) {
       jobId = current;
       root.render(createElement(ChatCard, { jobId }));
-      lastRequestedJobId = "";
       void loadCurrentJob();
     }
     if (!jobId || !document.body) { host.remove(); return; }
