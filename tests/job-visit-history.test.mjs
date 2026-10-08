@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseExactApplicationCount } from "../src/shared/application-count.ts";
-import { recordJobVisit, JOB_VISIT_STORAGE_KEY } from "../src/background/job-visit-history.ts";
+import { recordJobVisit as recordAbsoluteVisit, pruneJobVisitHistory, JOB_VISIT_MAX_AGE_MS, JOB_VISIT_STORAGE_KEY } from "../src/background/job-visit-history.ts";
+const sampleBase = Date.now() - 86_400_000;
+const recordJobVisit = (id, count, timestamp) => recordAbsoluteVisit(id, count, sampleBase + timestamp);
 let stored = {}, failGet = false, failSet = false;
 let listener, apiCalls = 0, apiCount = 200, apiFailure = false;
 globalThis.chrome = {
@@ -33,7 +35,7 @@ test("only count changes persist, including increases, decreases and zero", asyn
     const result = await recordJobVisit("123", count, 1000 + index);
     assert.equal(result.status, index === 1 ? "unchanged" : "saved");
     assert.equal(result.measurements.length, [1, 1, 2, 3, 4][index]);
-    if (index === 1) assert.equal(result.measurements.at(-1).timestamp, 1000);
+    if (index === 1) assert.equal(result.measurements.at(-1).timestamp, sampleBase + 1000);
     assert.equal(result.measurements.at(-1).count, Number(count));
   }
   const result = await recordJobVisit("123", "100+", 2000);
@@ -100,4 +102,48 @@ test("API failure creates no measurement; storage failure keeps fresh job succes
   const response = await dispatch("GET_JOB_VISIT");
   assert.equal(response.ok, true); assert.equal(response.data.applicationCount, "226");
   assert.equal(response.history.status, "unavailable"); failSet = false;
+});
+
+
+test("cleanup removes expired points across all jobs, keeps the 90-day boundary and removes empty jobs", async t => {
+  const now = Date.UTC(2026, 9, 8, 12);
+  t.mock.method(Date, "now", () => now);
+  const cutoff = now - JOB_VISIT_MAX_AGE_MS;
+  stored = { [JOB_VISIT_STORAGE_KEY]: {
+    "123": [{ timestamp: cutoff - 1, count: 10 }, { timestamp: cutoff, count: 20 }, { timestamp: now, count: 30 }],
+    "456": [{ timestamp: cutoff - 1, count: 99 }],
+  }, chatSettings: { provider: "openai" } };
+  await pruneJobVisitHistory();
+  assert.deepEqual(stored[JOB_VISIT_STORAGE_KEY]["123"].map(point => point.count), [20, 30]);
+  assert.equal(stored[JOB_VISIT_STORAGE_KEY]["456"], undefined);
+  assert.deepEqual(stored.chatSettings, { provider: "openai" });
+});
+
+test("unchanged and invalid counts still persist expiry; an expired identical count becomes a fresh first point", async t => {
+  const now = Date.UTC(2026, 9, 8, 12);
+  t.mock.method(Date, "now", () => now);
+  const expired = now - JOB_VISIT_MAX_AGE_MS - 1;
+  stored = { [JOB_VISIT_STORAGE_KEY]: {
+    "123": [{ timestamp: now - 1000, count: 120 }],
+    "456": [{ timestamp: expired, count: 99 }],
+  } };
+  const unchanged = await recordAbsoluteVisit("123", "120", now);
+  assert.equal(unchanged.status, "unchanged"); assert.equal(unchanged.measurements.length, 1);
+  assert.equal(stored[JOB_VISIT_STORAGE_KEY]["456"], undefined);
+  stored[JOB_VISIT_STORAGE_KEY]["456"] = [{ timestamp: expired, count: 99 }];
+  assert.equal((await recordAbsoluteVisit("123", "100+", now)).status, "invalid-count");
+  assert.equal(stored[JOB_VISIT_STORAGE_KEY]["456"], undefined);
+  stored[JOB_VISIT_STORAGE_KEY]["456"] = [{ timestamp: expired, count: 99 }];
+  const fresh = await recordAbsoluteVisit("456", "99", now);
+  assert.equal(fresh.status, "saved");
+  assert.deepEqual(fresh.measurements, [{ timestamp: now, count: 99 }]);
+});
+
+test("cleanup and concurrent visits share a queue and recover after cleanup failure", async () => {
+  stored = {}; failGet = true;
+  await assert.rejects(pruneJobVisitHistory());
+  failGet = false;
+  await Promise.all([pruneJobVisitHistory(), recordJobVisit("123", "10", 20000), recordJobVisit("456", "20", 20001)]);
+  assert.equal(stored[JOB_VISIT_STORAGE_KEY]["123"].at(-1).count, 10);
+  assert.equal(stored[JOB_VISIT_STORAGE_KEY]["456"].at(-1).count, 20);
 });

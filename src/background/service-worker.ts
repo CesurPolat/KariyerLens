@@ -1,4 +1,4 @@
-import { recordJobVisit } from "./job-visit-history.js";
+import { pruneJobVisitHistory, recordJobVisit } from "./job-visit-history.js";
 import { getJob, validateJobId } from "./kariyer-api.js";
 import { chatWithJob, validateMessages } from "./chat-api.js";
 import type { ChatStreamOptions } from "./chat-api.js";
@@ -15,6 +15,7 @@ const cache = new Map<string, JobSuccess>();
 
 const storageReady = chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
 storageReady.catch(() => {});
+void storageReady.then(() => pruneJobVisitHistory()).catch(() => {});
 
 async function loadJob(jobId: string): Promise<JobResult> {
   const cached = cache.get(jobId);
