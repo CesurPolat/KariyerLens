@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
-import type { Job } from "../shared/types.js";
-import { JobSummary } from "./components/JobSummary.js";
+import type { Job } from "../../shared/types.js";
+import { JobSummary } from "./JobSummary.js";
 
 const SELECTOR = '[data-kariyer-lens-date-info="true"]';
 let currentJob: Job | null = null;

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseExactApplicationCount } from "../src/shared/application-count.ts";
-import { recordJobVisit as recordAbsoluteVisit, pruneJobVisitHistory, JOB_VISIT_MAX_AGE_MS, JOB_VISIT_STORAGE_KEY } from "../src/background/job-visit-history.ts";
+import { recordJobVisit as recordAbsoluteVisit, pruneJobVisitHistory, JOB_VISIT_MAX_AGE_MS, JOB_VISIT_STORAGE_KEY } from "../src/features/application-history/job-visit-history.ts";
 const sampleBase = Date.now() - 86_400_000;
 const recordJobVisit = (id, count, timestamp) => recordAbsoluteVisit(id, count, sampleBase + timestamp);
 let stored = {}, failGet = false, failSet = false;

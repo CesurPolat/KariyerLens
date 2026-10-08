@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MarkdownMessage } from "../src/content/components/MarkdownMessage.tsx";
+import { MarkdownMessage } from "../src/features/chat/components/MarkdownMessage.tsx";
 
 const render = (content) => renderToStaticMarkup(createElement(MarkdownMessage, { content }));
 

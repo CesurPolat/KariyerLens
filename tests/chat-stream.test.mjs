@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chatWithJob, CHAT_TIMEOUT_MS, CHAT_TOTAL_TIMEOUT_MS } from "../src/background/chat-api.ts";
+import { chatWithJob, CHAT_TIMEOUT_MS, CHAT_TOTAL_TIMEOUT_MS } from "../src/features/chat/chat-api.ts";
 
 const job = { id: "123", title: "SQL Uzmanı", sector: [], workAreas: [], education: [], languages: [], isActive: true, isEasyApply: false };
 const history = [{ role: "user", content: "Özetle" }];

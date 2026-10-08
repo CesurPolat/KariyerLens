@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
-import type { JobVisitResult } from "../shared/types.js";
-import { ApplicationCount } from "./components/ApplicationCount.js";
+import type { JobVisitResult } from "../../shared/types.js";
+import { ApplicationCount } from "./ApplicationCount.js";
 
 type Visit = Extract<JobVisitResult, { ok: true }>;
 const SELECTOR = '[data-test="job-application-count"]';

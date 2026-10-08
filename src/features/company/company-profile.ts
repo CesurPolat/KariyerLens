@@ -1,4 +1,4 @@
-import type { CompanyProfile } from "../shared/types.js";
+import type { CompanyProfile } from "../../shared/types.js";
 export const CACHE_TTL_MS = 5 * 60 * 1000;
 export const cache = new Map<string, { data: CompanyProfile; fetchedAt: number }>();
 const pending = new Map<string, { promise: Promise<CompanyProfile>; controller: AbortController }>();

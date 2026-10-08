@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Failure } from "../shared/types.js";
+import type { Failure } from "../types.js";
 
 const SEARCH = "https://candidatesearchapigateway.kariyer.net";
 const CANDIDATE = "https://candidatewebapigw.kariyer.net";

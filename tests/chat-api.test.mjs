@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chatWithJob, validateMessages, plainText, buildContext, CHAT_TIMEOUT_MS } from "../src/background/chat-api.ts";
-import { KARIYER_TOOLS } from "../src/background/kariyer-tools.ts";
+import { chatWithJob, validateMessages, plainText, buildContext, CHAT_TIMEOUT_MS } from "../src/features/chat/chat-api.ts";
+import { KARIYER_TOOLS } from "../src/shared/kariyer/kariyer-tools.ts";
 const history = [{ role: "user", content: "İlanı özetle" }];
 const settings = (provider = "openai") => ({ provider, providers: { [provider]: { apiKey: "test-key", model: "test-model" } } });
 const job = { id: "123", title: "ERP Uzmanı", companyName: "Örnek", qualifications: "<p>SQL &amp; ERP</p><script>evil()</script>", education: ["Üniversite"], applicationCount: "200", secret: "not included" };

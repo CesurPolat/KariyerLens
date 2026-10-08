@@ -1,4 +1,4 @@
-import type { Job } from "../shared/types.js";
+import type { Job } from "../../shared/types.js";
 interface ApplicationInsight { applicationsPerDay: number; openDays: number }
 
 export function formatPublishedAt(value?: string) {

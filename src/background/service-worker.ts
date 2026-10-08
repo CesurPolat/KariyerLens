@@ -1,12 +1,12 @@
-import { pruneJobVisitHistory, recordJobVisit } from "./job-visit-history.js";
-import { getJob, validateJobId } from "./kariyer-api.js";
-import { chatWithJob, validateMessages } from "./chat-api.js";
-import type { ChatStreamOptions } from "./chat-api.js";
+import { pruneJobVisitHistory, recordJobVisit } from "../features/application-history/job-visit-history.js";
+import { getJob, validateJobId } from "../shared/kariyer/kariyer-api.js";
+import { chatWithJob, validateMessages } from "../features/chat/chat-api.js";
+import type { ChatStreamOptions } from "../features/chat/chat-api.js";
 import { MESSAGE_TYPES } from "../shared/messages.js";
 import type { ChatSettings, CompanyStatsResult, ExtensionMessage, JobResult, JobSuccess } from "../shared/types.js";
 import { z } from "zod";
-import { callKariyerTool, KARIYER_TOOLS } from "./kariyer-tools.js";
-import { getKariyerCredentials, observeKariyerSession } from "./kariyer-session.js";
+import { callKariyerTool, KARIYER_TOOLS } from "../shared/kariyer/kariyer-tools.js";
+import { getKariyerCredentials, observeKariyerSession } from "../shared/kariyer/kariyer-session.js";
 
 observeKariyerSession();
 

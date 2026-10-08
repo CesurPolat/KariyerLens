@@ -1,8 +1,8 @@
 import type { JobVisitResult } from "../shared/types.js";
 
-import { clearJobSummary, showJobSummary } from "./mount-job-summary.js";
+import { clearJobSummary, showJobSummary } from "../features/job-summary/mount.js";
 
-import { clearApplicationCount, showApplicationCount } from "./mount-application-count.js";
+import { clearApplicationCount, showApplicationCount } from "../features/application-history/mount.js";
 import { MESSAGE_TYPES } from "../shared/messages.js";
 const JOB_FEATURE_LIST_SELECTOR = '[data-test="job-feature-list"]';
 const JOB_DETAIL_MAIN_SELECTOR = ".job-detail-body-main";

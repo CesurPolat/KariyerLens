@@ -1,10 +1,10 @@
-import type { ChatMessage, ChatResult, ChatSettings, Failure, Job, Provider } from "../shared/types.js";
-import type { ChatProgress, CompanyStatsResult, JobResult } from "../shared/types.js";
+import type { ChatMessage, ChatResult, ChatSettings, Failure, Job, Provider } from "../../shared/types.js";
+import type { ChatProgress, CompanyStatsResult, JobResult } from "../../shared/types.js";
 import { createAgent, createMiddleware, tool } from "langchain/browser";
 import { ChatOpenAI } from "@langchain/openai";
 import { z } from "zod";
-import { KARIYER_TOOLS } from "./kariyer-tools.js";
-import type { KariyerToolResult } from "./kariyer-tools.js";
+import { KARIYER_TOOLS } from "../../shared/kariyer/kariyer-tools.js";
+import type { KariyerToolResult } from "../../shared/kariyer/kariyer-tools.js";
 
 // false: yanıt tek seferde gelir; bekleme ve tool durumları gösterilmeye devam eder.
 export const CHAT_STREAMING_ENABLED = true;

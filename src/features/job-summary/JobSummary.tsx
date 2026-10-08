@@ -8,7 +8,7 @@ import History from "lucide-react/dist/esm/icons/history.mjs";
 import Sparkles from "lucide-react/dist/esm/icons/sparkles.mjs";
 import TriangleAlert from "lucide-react/dist/esm/icons/triangle-alert.mjs";
 import type { Job } from "../../shared/types.js";
-import { getApplicationInsight, getHiringActivity } from "../job-insights.js";
+import { getApplicationInsight, getHiringActivity } from "./job-insights.js";
 import styles from "./job-summary.css?inline";
 
 type HiringActivity = ReturnType<typeof getHiringActivity>;

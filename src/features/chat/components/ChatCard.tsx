@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Maximize2, MessageSquareText, Send, Settings, Sparkles, Trash2, X } from "lucide-react";
-import { useJobChat } from "./use-job-chat.js";
+import { useJobChat } from "../hooks/use-job-chat.js";
 import { MarkdownMessage } from "./MarkdownMessage.js";
-import { useChatResize } from "./use-chat-resize.js";
+import { useChatResize } from "../hooks/use-chat-resize.js";
 import styles from "./chat.css?inline";
 
 const suggestions = ["İlanı özetle", "Aranan yetkinlikler neler?", "Mülakata nasıl hazırlanabilirim?"];

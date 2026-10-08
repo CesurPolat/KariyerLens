@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getApplicationInsight, getHiringActivity } from "../src/content/job-insights.ts";
+import { getApplicationInsight, getHiringActivity } from "../src/features/job-summary/job-insights.ts";
 
 test("missing application/date data does not produce a hiring estimate", () => {
   const job = { applicationReviewText: "Şirket başvuruları bugün inceledi." };

@@ -6,7 +6,7 @@ Her yeni endpoint için yöntem, adres, parametreler, oturum gereksinimi, anonim
 
 ## KariyerLens sohbet araçları
 
-Bu dokümandaki URL'si bilinen 19 ek endpoint `src/background/kariyer-tools.ts` üzerinden sohbet ajanına bağlandı. Mevcut `get_current_job` ve `get_current_company_stats` ile toplam 21 tool sunulur. Aşağıdaki endpoint kayıtlarında geçen “henüz entegre edilmedi” ifadeleri kayıtların oluşturulduğu tarihe aittir; güncel kod durumu bu bölümdedir. Canlı API uyumluluğu bu entegrasyon sırasında doğrulanmadı.
+Bu dokümandaki URL'si bilinen 19 ek endpoint `src/shared/kariyer/kariyer-tools.ts` üzerinden sohbet ajanına bağlandı. Mevcut `get_current_job` ve `get_current_company_stats` ile toplam 21 tool sunulur. Aşağıdaki endpoint kayıtlarında geçen “henüz entegre edilmedi” ifadeleri kayıtların oluşturulduğu tarihe aittir; güncel kod durumu bu bölümdedir. Canlı API uyumluluğu bu entegrasyon sırasında doğrulanmadı.
 
 | Tool | Endpoint |
 | --- | --- |
@@ -38,7 +38,7 @@ Başarı sarmalayıcıları (`data`, `result`, `header/body`, doğrudan JSON) ay
 
 ## İlan detayı — `GET /job`
 
-**Kaynak:** `src/background/kariyer-api.ts` içindeki mevcut entegrasyon.
+**Kaynak:** `src/shared/kariyer/kariyer-api.ts` içindeki mevcut entegrasyon.
 
 ```http
 GET https://candidatesearchapigateway.kariyer.net/job?jobId=<JOB_ID>

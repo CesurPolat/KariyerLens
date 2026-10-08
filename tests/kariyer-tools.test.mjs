@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { callKariyerTool, KARIYER_TOOLS } from "../src/background/kariyer-tools.ts";
-import { captureKariyerSession, getKariyerCredentials } from "../src/background/kariyer-session.ts";
+import { callKariyerTool, KARIYER_TOOLS } from "../src/shared/kariyer/kariyer-tools.ts";
+import { captureKariyerSession, getKariyerCredentials } from "../src/shared/kariyer/kariyer-session.ts";
 
 const candidate = "https://candidatewebapigw.kariyer.net";
 const search = "https://candidatesearchapigateway.kariyer.net";

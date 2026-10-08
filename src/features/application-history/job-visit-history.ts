@@ -1,5 +1,5 @@
-import type { JobVisitHistory, JobVisitMeasurement } from "../shared/types.js";
-import { parseExactApplicationCount } from "../shared/application-count.js";
+import type { JobVisitHistory, JobVisitMeasurement } from "../../shared/types.js";
+import { parseExactApplicationCount } from "../../shared/application-count.js";
 
 export const JOB_VISIT_STORAGE_KEY = "jobVisitHistory";
 export const JOB_VISIT_MAX_AGE_MS = 90 * 86_400_000;

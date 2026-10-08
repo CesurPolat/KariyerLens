@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { ChatMessage, ChatResult, ChatStreamEvent } from "../../shared/types.js";
-import { MESSAGE_TYPES } from "../../shared/messages.js";
+import type { ChatMessage, ChatResult, ChatStreamEvent } from "../../../shared/types.js";
+import { MESSAGE_TYPES } from "../../../shared/messages.js";
 
 export const INITIAL_STATUS = "Mesajların, ilan bilgileri ve araçlarla alınan şirket bilgileri seçtiğin yapay zekâ sağlayıcısına gönderilir. İlk kullanımda Ayarlar’ı aç.";
 

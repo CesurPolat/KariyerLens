@@ -1,4 +1,4 @@
-import type { Failure, Job, JobResult } from "../shared/types.js";
+import type { Failure, Job, JobResult } from "../types.js";
 
 const record = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
