@@ -82,7 +82,21 @@ export function getHiringActivity(data: Job, insight: ApplicationInsight | null)
   // PublishedAt is the primary signal. Review recency only supports the estimate;
   // a recent review cannot make an old, high-volume listing look highly active.
   const publishedScore = getPublishedScore(insight.openDays);
-  const reviewScore = reviewDays <= 1 ? 25 : reviewDays <= 3 ? 20 : reviewDays <= 7 ? 12 : reviewDays <= 14 ? 6 : 0;
+  const noListingReview = reviewDays > insight.openDays;
+  // Ease first-review tolerance down at days 3, 5 and 7.
+  const firstReviewScore = insight.openDays <= 3 ? 20 : insight.openDays <= 5 ? 12 : insight.openDays <= 7 ? 6 : 0;
+  const reviewScore = noListingReview ? firstReviewScore : reviewDays <= 1 ? 25 : reviewDays <= 3 ? 20 : reviewDays <= 7 ? 12 : reviewDays <= 14 ? 6 : 0;
+  const reviewStatusCopy = noListingReview
+    ? insight.openDays <= 3
+      ? "İlan henüz yeni. İlk 3 gün içinde başvuruların incelenmemiş olması olağan."
+      : insight.openDays <= 5
+        ? "Başvurular henüz incelenmedi. İlan 4–5 günlük; ilk inceleme için bekleme süresi uzuyor."
+        : insight.openDays <= 7
+          ? "Başvurular henüz incelenmedi. İlan 6–7 günlük; inceleme eksikliği hareketlilik tahminini daha fazla etkiliyor."
+          : "Başvurular henüz incelenmedi. İlk 7 günlük süre geçti; işverenin başvuru takibi zayıf olabilir."
+    : reviewDays > 7
+      ? "İşveren Kariyer.net başvurularını aktif takip etmiyor olabilir; doğrudan iletişime geçmek daha mantıklı olabilir."
+      : null;
   const reviewIsStale = reviewDays > 7;
   const reviewFollowUpCopy = "İşveren Kariyer.net başvurularını aktif takip etmiyor olabilir; doğrudan iletişime geçmek daha mantıklı olabilir.";
   const competitionPenalty = applicationCount >= 1500 ? 5 : applicationCount >= 750 ? 2 : 0;
@@ -104,11 +118,11 @@ export function getHiringActivity(data: Job, insight: ApplicationInsight | null)
     };
   }
   return score <= 34
-    ? { score, label: "Çok düşük hareketlilik", color: "#dc2626", copy: withCompetitionWarning(reviewIsStale ? reviewFollowUpCopy : "Alım sinyali çok zayıf. İlanın aday havuzu toplama olasılığı yüksek; başvurmadan önce dikkatli değerlendirin.") }
+    ? { score, label: "Çok düşük hareketlilik", color: "#dc2626", copy: withCompetitionWarning(reviewStatusCopy ?? (reviewIsStale ? reviewFollowUpCopy : "Alım sinyali çok zayıf. İlanın aday havuzu toplama olasılığı yüksek; başvurmadan önce dikkatli değerlendirin.")) }
     : score < 50
-      ? { score, label: "Düşük hareketlilik", color: "#f59e0b", copy: withCompetitionWarning(reviewIsStale ? reviewFollowUpCopy : "Alım hareketliliği düşük görünüyor; süreç yavaş ilerliyor olabilir.") }
+      ? { score, label: "Düşük hareketlilik", color: "#f59e0b", copy: withCompetitionWarning(reviewStatusCopy ?? (reviewIsStale ? reviewFollowUpCopy : "Alım hareketliliği düşük görünüyor; süreç yavaş ilerliyor olabilir.")) }
       : score < 65
-        ? { score, label: "Orta hareketlilik", color: "#8b5cf6", copy: withCompetitionWarning("Başvurular aralıklı inceleniyor; alım süreci yavaş ilerliyor olabilir.") }
-        : { score, label: "Yüksek hareketlilik", color: "#10b981", copy: withCompetitionWarning("Başvurular yakın zamanda incelenmiş. Alım süreci hareketli görünüyor.") };
+        ? { score, label: "Orta hareketlilik", color: "#8b5cf6", copy: withCompetitionWarning(reviewStatusCopy ?? "Başvurular aralıklı inceleniyor; alım süreci yavaş ilerliyor olabilir.") }
+        : { score, label: "Yüksek hareketlilik", color: "#10b981", copy: withCompetitionWarning(reviewStatusCopy ?? "Başvurular yakın zamanda incelenmiş. Alım süreci hareketli görünüyor.") };
 }
 
