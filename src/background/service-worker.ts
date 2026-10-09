@@ -13,6 +13,8 @@ observeKariyerSession();
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const cache = new Map<string, JobSuccess>();
+const chatSizeSchema = z.object({ width: z.number().finite().positive().max(10000), height: z.number().finite().positive().max(10000) }).strict();
+let sizeWrites: Promise<unknown> = Promise.resolve();
 
 const storageReady = chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
 storageReady.catch(() => {});
@@ -76,6 +78,21 @@ async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.M
     if (message.type === MESSAGE_TYPES.REFRESH_CV_MEMORY) await clearMemory(true);
     return { ok: true, data: await getMemoryStatus() };
   }
+  if (message.type === MESSAGE_TYPES.GET_CHAT_SIZE || message.type === MESSAGE_TYPES.SET_CHAT_SIZE) {
+    await storageReady;
+    if (message.type === MESSAGE_TYPES.SET_CHAT_SIZE) {
+      const parsed = chatSizeSchema.safeParse(message.size);
+      if (!parsed.success) return { ok: false, code: "INVALID_ARGUMENTS", message: "Geçersiz sohbet boyutu." };
+      const write = sizeWrites.then(() => chrome.storage.local.set({ chatPanelSize: parsed.data }));
+      sizeWrites = write.catch(() => {});
+      await write;
+      return { ok: true };
+    }
+    await sizeWrites;
+    const stored = await chrome.storage.local.get("chatPanelSize");
+    const parsed = chatSizeSchema.safeParse(stored.chatPanelSize);
+    return { ok: true, data: parsed.success ? parsed.data : null };
+  }
   const jobId = validateJobId(message.jobId);
   if (!jobId) return { ok: false, code: "INVALID_JOB_ID", message: "Geçerli bir ilan bulunamadı." };
   if (message.type === MESSAGE_TYPES.GET_JOB) return loadJob(jobId);
@@ -128,7 +145,7 @@ async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.M
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (sender.id !== chrome.runtime.id || ![MESSAGE_TYPES.GET_JOB, MESSAGE_TYPES.GET_JOB_VISIT, MESSAGE_TYPES.CHAT_JOB, MESSAGE_TYPES.OPEN_OPTIONS, MESSAGE_TYPES.GET_MEMORY_STATUS, MESSAGE_TYPES.SET_MEMORY_ENABLED, MESSAGE_TYPES.CLEAR_MEMORY, MESSAGE_TYPES.REFRESH_CV_MEMORY].includes(message?.type)) return;
+  if (sender.id !== chrome.runtime.id || ![MESSAGE_TYPES.GET_JOB, MESSAGE_TYPES.GET_JOB_VISIT, MESSAGE_TYPES.CHAT_JOB, MESSAGE_TYPES.OPEN_OPTIONS, MESSAGE_TYPES.GET_MEMORY_STATUS, MESSAGE_TYPES.SET_MEMORY_ENABLED, MESSAGE_TYPES.CLEAR_MEMORY, MESSAGE_TYPES.REFRESH_CV_MEMORY, MESSAGE_TYPES.GET_CHAT_SIZE, MESSAGE_TYPES.SET_CHAT_SIZE].includes(message?.type)) return;
   if (sender.tab && !/^https:\/\/(?:[\w-]+\.)*kariyer\.net\//i.test(sender.url || "")) return;
   handleMessage(message, sender).then(sendResponse).catch(() => sendResponse({ ok: false, code: "INTERNAL_ERROR", message: "İstek tamamlanamadı. Uzantıyı yeniden yükleyip deneyin." }));
   return true;

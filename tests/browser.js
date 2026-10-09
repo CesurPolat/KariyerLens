@@ -4,6 +4,7 @@ let lastRequestedJobId = "";
 function findJobId() { return currentJob; }
 function loadCurrentJob() {}
 const requests = [];
+let savedChatSize = null;
 const makeEvent = () => {
   const listeners = new Set();
   return { addListener: (fn) => listeners.add(fn), removeListener: (fn) => listeners.delete(fn), emit: (event) => [...listeners].forEach((fn) => fn(event)) };
@@ -15,6 +16,8 @@ window.chrome = { runtime: { connect: () => {
   };
   return port;
 }, sendMessage: (message) => {
+  if (message.type === "GET_CHAT_SIZE") return Promise.resolve({ ok: true, data: savedChatSize });
+  if (message.type === "SET_CHAT_SIZE") { savedChatSize = { ...message.size }; return Promise.resolve({ ok: true }); }
   if (message.type === "OPEN_OPTIONS") return Promise.resolve({ ok: true });
   return new Promise((resolve) => requests.push({ message, resolve }));
 } } };
