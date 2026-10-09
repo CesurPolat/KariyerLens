@@ -62,14 +62,16 @@ async function loadCompany(jobId: string, sender: chrome.runtime.MessageSender):
   } catch { return unavailable; }
 }
 
+const isOptionsSender = (sender: chrome.runtime.MessageSender) => Boolean(sender.url?.startsWith("chrome-extension://")) && sender.id === chrome.runtime.id && sender.url === chrome.runtime.getURL("src/options/options.html");
+
 async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.MessageSender, streaming?: ChatStreamOptions) {
   if (message.type === MESSAGE_TYPES.OPEN_OPTIONS) {
     await chrome.runtime.openOptionsPage();
     return { ok: true };
   }
   if (new Set<string>([MESSAGE_TYPES.GET_MEMORY_STATUS, MESSAGE_TYPES.SET_MEMORY_ENABLED, MESSAGE_TYPES.CLEAR_MEMORY, MESSAGE_TYPES.REFRESH_CV_MEMORY]).has(message.type)) {
-    // Management is available only to the extension's options page, never site tabs.
-    if (sender.tab || sender.url !== chrome.runtime.getURL("src/options/options.html"))
+    // The extension options page may be opened in its own tab.
+    if (!isOptionsSender(sender))
       return { ok: false, code: "UNAUTHORIZED", message: "Hafıza ayarlarına erişilemiyor." };
     await storageReady;
     if (message.type === MESSAGE_TYPES.SET_MEMORY_ENABLED) {
@@ -177,7 +179,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (sender.id !== chrome.runtime.id || ![MESSAGE_TYPES.GET_JOB, MESSAGE_TYPES.GET_JOB_VISIT, MESSAGE_TYPES.CHAT_JOB, MESSAGE_TYPES.OPEN_OPTIONS, MESSAGE_TYPES.GET_MEMORY_STATUS, MESSAGE_TYPES.SET_MEMORY_ENABLED, MESSAGE_TYPES.CLEAR_MEMORY, MESSAGE_TYPES.REFRESH_CV_MEMORY, MESSAGE_TYPES.GET_CHAT_SIZE, MESSAGE_TYPES.SET_CHAT_SIZE].includes(message?.type)) return;
-  if (sender.tab && !/^https:\/\/(?:[\w-]+\.)*kariyer\.net\//i.test(sender.url || "")) return;
+  if (sender.tab && !isOptionsSender(sender) && !/^https:\/\/(?:[\w-]+\.)*kariyer\.net\//i.test(sender.url || "")) return;
   handleMessage(message, sender).then(sendResponse).catch(() => sendResponse({ ok: false, code: "INTERNAL_ERROR", message: "İstek tamamlanamadı. Uzantıyı yeniden yükleyip deneyin." }));
   return true;
 });

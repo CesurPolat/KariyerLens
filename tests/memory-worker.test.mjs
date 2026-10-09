@@ -78,3 +78,17 @@ test("only options page manages memory; refresh and disabled state reach worker 
   const cleared = await dispatch({ type: "CLEAR_MEMORY" }, optionsSender);
   assert.deepEqual(cleared.data, { enabled: false, jobCount: 0, cvCount: 0, cvFetchedAt: null });
 });
+
+test("options opened in a tab can read and manage memory while other extension tabs remain blocked", async () => {
+  const tabSender = { ...optionsSender, tab: { id: 9, url: optionsUrl } };
+  const status = await dispatch({ type: "GET_MEMORY_STATUS" }, tabSender);
+  assert.equal(status.ok, true); assert.equal(status.data.jobCount, 0);
+  assert.equal((await dispatch({ type: "SET_MEMORY_ENABLED", enabled: true }, tabSender)).data.enabled, true);
+  assert.equal((await dispatch({ type: "REFRESH_CV_MEMORY" }, tabSender)).ok, true);
+  assert.equal((await dispatch({ type: "CLEAR_MEMORY" }, tabSender)).ok, true);
+  for (const url of ["chrome-extension://extension-test/other.html", "chrome-extension://extension-test/src/dashboard/dashboard.html", optionsUrl + "?fake"]) {
+    let responded = false;
+    assert.equal(listener({ type: "CLEAR_MEMORY" }, { ...tabSender, url }, () => { responded = true; }), undefined);
+    assert.equal(responded, false);
+  }
+});
