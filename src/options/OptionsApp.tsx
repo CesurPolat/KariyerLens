@@ -1,3 +1,5 @@
+import { MESSAGE_TYPES } from "../shared/messages.js";
+import type { MemoryStatus } from "../features/memory/chat-memory.js";
 import { useEffect, useState } from "react";
 import { KeyRound, Save, Sparkles, Trash2 } from "lucide-react";
 import type { ChatSettings, Provider, ProviderSettings } from "../shared/types.js";
@@ -8,6 +10,9 @@ const selectProvider = (value: unknown): Provider => value === "openrouter" || v
 export function OptionsApp() {
   const [provider, setProvider] = useState<Provider>("openai");
   const [configs, setConfigs] = useState<Configs>({ openai: {}, openrouter: {}, cesurpolat: {} });
+  const [memory, setMemory] = useState<MemoryStatus | null>(null);
+  const [memoryBusy, setMemoryBusy] = useState(false);
+  const [memoryStatus, setMemoryStatus] = useState("");
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
@@ -23,6 +28,10 @@ export function OptionsApp() {
           setConfigs({ openai: chatSettings.providers?.openai || {}, openrouter: chatSettings.providers?.openrouter || {}, cesurpolat: chatSettings.providers?.cesurpolat || {} });
         }
         setReady(true);
+        try {
+          const result = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.GET_MEMORY_STATUS });
+          if (active) { if (result?.ok) setMemory(result.data); else setMemoryStatus("Hafıza bilgileri alınamadı."); }
+        } catch { if (active) setMemoryStatus("Hafıza bilgileri alınamadı."); }
       } catch { if (active) setStatus("Ayarlar yüklenemedi. Uzantıyı yeniden yükleyip deneyin."); }
     }
     void load();
@@ -51,6 +60,20 @@ export function OptionsApp() {
     finally { setSaving(false); }
   }
 
+  async function manageMemory(type: string, enabled?: boolean) {
+    if (memoryBusy) return;
+    setMemoryBusy(true);
+    try {
+      const result = await chrome.runtime.sendMessage({ type, ...(enabled === undefined ? {} : { enabled }) });
+      if (!result?.ok) throw new Error("memory unavailable");
+      setMemory(result.data);
+      setMemoryStatus(type === MESSAGE_TYPES.REFRESH_CV_MEMORY ? "CV hafızası sıfırlandı. Sonraki ilgili sorunda güncel CV alınacak."
+        : type === MESSAGE_TYPES.CLEAR_MEMORY ? "İlan ve CV hafızası temizlendi."
+        : enabled ? "Hafıza açıldı." : "Hafıza kapatıldı. Kayıtlar kullanılmayacak veya güncellenmeyecek.");
+    } catch { setMemoryStatus("Hafıza işlemi tamamlanamadı. Yeniden dene."); }
+    finally { setMemoryBusy(false); }
+  }
+
   return <main>
     <h1><Sparkles size={26} aria-hidden="true" /> KariyerLens Asistan</h1><p>Mesajların, ilan ve araçlarla alınan şirket bilgileri seçtiğin sağlayıcıya gönderilir. {isFree ? "KariyerLens Free için API anahtarı gerekmez." : "Kendi API anahtarını kullan; API kullanımı sağlayıcının tarifesine göre ücretlendirilebilir."}</p>
     <form id="settings" onSubmit={event => { event.preventDefault(); void persist(); }}>
@@ -71,6 +94,20 @@ export function OptionsApp() {
       </>}
       <div className="actions"><button type="submit" disabled={disabled}><Save size={18} aria-hidden="true" />{saving ? "Kaydediliyor…" : "Kaydet"}</button>
         {!isFree && <button id="delete" type="button" disabled={disabled} onClick={() => void persist(true)}><Trash2 size={18} aria-hidden="true" />Bu sağlayıcının anahtarını sil</button>}</div>
-    </form><p id="status" role="status" aria-live="polite">{status}</p>
+    </form>
+    <section className="memory-settings" aria-labelledby="memory-title">
+      <h2 id="memory-title">İlan ve CV hafızası</h2>
+      <p>Asistanla sohbet ettiğin ilanlar ve ihtiyaç anında alınan CV bilgileri bu cihazda saklanır. İlgili sorularda hafızadaki bilgiler seçtiğin yapay zekâ sağlayıcısına gönderilir. CV kayıtları 24 saat geçerlidir. Sohbeti temizlemek hafızayı silmez.</p>
+      <label className="memory-toggle"><input type="checkbox" checked={memory?.enabled ?? true} disabled={!memory || memoryBusy}
+        onChange={event => void manageMemory(MESSAGE_TYPES.SET_MEMORY_ENABLED, event.target.checked)} />Hafızayı kullan</label>
+      {memory && <p>{memory.jobCount} ilan · {memory.cvCount} CV kaydı<br />
+        Son CV kaydı: {memory.cvFetchedAt === null ? "Henüz yok" : new Date(memory.cvFetchedAt).toLocaleString("tr-TR")}</p>}
+      <div className="actions">
+        <button type="button" disabled={!memory || memoryBusy} onClick={() => void manageMemory(MESSAGE_TYPES.REFRESH_CV_MEMORY)}>CV hafızasını yenile</button>
+        <button type="button" disabled={!memory || memoryBusy} onClick={() => void manageMemory(MESSAGE_TYPES.CLEAR_MEMORY)}><Trash2 size={18} aria-hidden="true" />Hafızayı temizle</button>
+      </div>
+      <p role="status" aria-live="polite">{memoryStatus}</p>
+    </section>
+    <p id="status" role="status" aria-live="polite">{status}</p>
   </main>;
 }

@@ -51,7 +51,7 @@ export const KARIYER_TOOLS: Endpoint[] = [
   { name: "get_restricted_companies", description: "Adayın kısıtlanan şirketler listesini getirir; kısıtları değiştirmez.", origin: SEARCH, path: "/Search/my-ambargoed-companies", schema: empty, auth: "bearer" },
 ];
 
-export type KariyerToolResult = { ok: true; data: unknown; truncated: boolean; methodAssumed: boolean } | Failure;
+export type KariyerToolResult = { ok: true; data: unknown; truncated: boolean; methodAssumed: boolean; cached?: boolean; fetchedAt?: number } | Failure;
 export interface KariyerCredentials { bearer?: string; apiKey?: string }
 const failure = (code: string, message: string): Failure => ({ ok: false, code, message });
 const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};

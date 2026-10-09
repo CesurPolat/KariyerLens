@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { ChatMessage, ChatResult, ChatStreamEvent } from "../../../shared/types.js";
 import { MESSAGE_TYPES } from "../../../shared/messages.js";
 
-export const INITIAL_STATUS = "Mesajların, ilan bilgileri ve araçlarla alınan şirket bilgileri seçtiğin yapay zekâ sağlayıcısına gönderilir. İlk kullanımda Ayarlar’ı aç.";
+export const INITIAL_STATUS = "Mesajların, ilan bilgileri ve araçlarla alınan şirket bilgileri seçtiğin yapay zekâ sağlayıcısına gönderilir. Hafıza açıksa sohbet edilen ilanlar ve ilgili sorularda alınan CV bu cihazda hatırlanır; ilgili bilgiler sağlayıcıya gönderilir. İlk kullanımda Ayarlar’ı aç.";
 
 export function useJobChat(jobId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);

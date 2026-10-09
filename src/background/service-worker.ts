@@ -1,6 +1,7 @@
+import { clearMemory, getMemoryJob, getMemoryStatus, hashMemorySession, listMemoryJobs, memoryJobContext, memoryRevision, rememberJob, setMemoryEnabled, withResumeMemory } from "../features/memory/chat-memory.js";
 import { pruneJobVisitHistory, recordJobVisit } from "../features/application-history/job-visit-history.js";
 import { getJob, validateJobId } from "../shared/kariyer/kariyer-api.js";
-import { chatWithJob, validateMessages } from "../features/chat/chat-api.js";
+import { buildContext, chatWithJob, validateMessages } from "../features/chat/chat-api.js";
 import type { ChatStreamOptions } from "../features/chat/chat-api.js";
 import { MESSAGE_TYPES } from "../shared/messages.js";
 import type { ChatSettings, CompanyStatsResult, ExtensionMessage, JobResult, JobSuccess } from "../shared/types.js";
@@ -62,6 +63,19 @@ async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.M
     await chrome.runtime.openOptionsPage();
     return { ok: true };
   }
+  if (new Set<string>([MESSAGE_TYPES.GET_MEMORY_STATUS, MESSAGE_TYPES.SET_MEMORY_ENABLED, MESSAGE_TYPES.CLEAR_MEMORY, MESSAGE_TYPES.REFRESH_CV_MEMORY]).has(message.type)) {
+    // Management is available only to the extension's options page, never site tabs.
+    if (sender.tab || sender.url !== chrome.runtime.getURL("src/options/options.html"))
+      return { ok: false, code: "UNAUTHORIZED", message: "Hafıza ayarlarına erişilemiyor." };
+    await storageReady;
+    if (message.type === MESSAGE_TYPES.SET_MEMORY_ENABLED) {
+      if (typeof message.enabled !== "boolean") return { ok: false, code: "INVALID_ARGUMENTS", message: "Geçersiz hafıza ayarı." };
+      await setMemoryEnabled(message.enabled);
+    }
+    if (message.type === MESSAGE_TYPES.CLEAR_MEMORY) await clearMemory();
+    if (message.type === MESSAGE_TYPES.REFRESH_CV_MEMORY) await clearMemory(true);
+    return { ok: true, data: await getMemoryStatus() };
+  }
   const jobId = validateJobId(message.jobId);
   if (!jobId) return { ok: false, code: "INVALID_JOB_ID", message: "Geçerli bir ilan bulunamadı." };
   if (message.type === MESSAGE_TYPES.GET_JOB) return loadJob(jobId);
@@ -79,17 +93,42 @@ async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.M
   if (!validateMessages(message.messages)) return { ok: false, code: "INVALID_MESSAGES", message: "Mesajlar geçersiz veya çok uzun." };
   await storageReady;
   const { chatSettings } = await chrome.storage.local.get<{ chatSettings?: ChatSettings }>("chatSettings");
+  const startedRevision = memoryRevision();
+  let recorded = false;
   return chatWithJob({}, message.messages, chatSettings, fetch, {
-    loadJob: () => loadJob(jobId), loadCompany: () => loadCompany(jobId, sender),
-    callKariyerTool: (name, input, signal) => {
+    loadJob: async () => {
+      const result = await loadJob(jobId);
+      if (result.ok && !streaming?.signal?.aborted) {
+        const increment = !recorded;
+        recorded = true;
+        await rememberJob(JSON.parse(buildContext(result.data)), result.fetchedAt, increment, startedRevision);
+      }
+      return result;
+    }, loadCompany: () => loadCompany(jobId, sender),
+    memory: { context: memoryJobContext, list: listMemoryJobs, get: getMemoryJob },
+    callKariyerTool: async (name, input, signal) => {
       const endpoint = KARIYER_TOOLS.find(item => item.name === name);
-      return callKariyerTool(name, input, jobId, endpoint ? getKariyerCredentials(endpoint.origin) : {}, fetch, signal);
+      const credentials = endpoint ? getKariyerCredentials(endpoint.origin) : {};
+      const parsed = endpoint?.schema.safeParse(input);
+      const load = async () => {
+        const result = await callKariyerTool(name, input, jobId, credentials, fetch, signal);
+        if (["get_resumes", "get_resume"].includes(name) && endpoint
+          && getKariyerCredentials(endpoint.origin).bearer !== credentials.bearer)
+          return { ok: false as const, code: "AUTH_REQUIRED", message: "Kariyer.net oturumu değişti. Yeniden deneyin." };
+        return result;
+      };
+      if (!parsed?.success || !["get_resumes", "get_resume"].includes(name)) return load();
+      const scope = await hashMemorySession(credentials.bearer);
+      const result = await withResumeMemory(name, parsed.data, scope, load, signal);
+      if (endpoint && getKariyerCredentials(endpoint.origin).bearer !== credentials.bearer)
+        return { ok: false, code: "AUTH_REQUIRED", message: "Kariyer.net oturumu değişti. Yeniden deneyin." };
+      return result;
     },
   }, streaming);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (sender.id !== chrome.runtime.id || ![MESSAGE_TYPES.GET_JOB, MESSAGE_TYPES.GET_JOB_VISIT, MESSAGE_TYPES.CHAT_JOB, MESSAGE_TYPES.OPEN_OPTIONS].includes(message?.type)) return;
+  if (sender.id !== chrome.runtime.id || ![MESSAGE_TYPES.GET_JOB, MESSAGE_TYPES.GET_JOB_VISIT, MESSAGE_TYPES.CHAT_JOB, MESSAGE_TYPES.OPEN_OPTIONS, MESSAGE_TYPES.GET_MEMORY_STATUS, MESSAGE_TYPES.SET_MEMORY_ENABLED, MESSAGE_TYPES.CLEAR_MEMORY, MESSAGE_TYPES.REFRESH_CV_MEMORY].includes(message?.type)) return;
   if (sender.tab && !/^https:\/\/(?:[\w-]+\.)*kariyer\.net\//i.test(sender.url || "")) return;
   handleMessage(message, sender).then(sendResponse).catch(() => sendResponse({ ok: false, code: "INTERNAL_ERROR", message: "İstek tamamlanamadı. Uzantıyı yeniden yükleyip deneyin." }));
   return true;

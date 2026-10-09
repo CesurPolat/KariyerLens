@@ -4,7 +4,16 @@ const results = document.querySelector("#results");
 const failureMode = new URL(location.href).searchParams.has("storage-failure");
 const savedProxy = new URL(location.href).searchParams.has("saved-proxy");
 let trusted = false, writes = [], denyWrite = false;
-window.chrome = { storage: { local: {
+let memory = { enabled: true, jobCount: 3, cvCount: 1, cvFetchedAt: Date.now() };
+const memoryCalls = [];
+window.chrome = { runtime: { async sendMessage(message) {
+  memoryCalls.push(message);
+  if (denyWrite) throw new Error("denied");
+  if (message.type === "SET_MEMORY_ENABLED") memory.enabled = message.enabled;
+  if (message.type === "REFRESH_CV_MEMORY") { memory.cvCount = 0; memory.cvFetchedAt = null; }
+  if (message.type === "CLEAR_MEMORY") { memory.jobCount = 0; memory.cvCount = 0; memory.cvFetchedAt = null; }
+  return { ok: true, data: structuredClone(memory) };
+} }, storage: { local: {
   async setAccessLevel(value) {
     if (failureMode) throw new Error("denied");
     trusted = value.accessLevel === "TRUSTED_CONTEXTS";
@@ -63,6 +72,17 @@ async function run() {
   check(key.value === "test-router-key" && model.value === "test/router" && document.querySelector("#delete"), "Diğer sağlayıcıya dönünce alanlar ve kayıtlı ayarlar geri gelir");
   select("cesurpolat"); await pause();
   check(!document.querySelector("#api-key,#model") && writes.at(-1).chatSettings.providers.openrouter.apiKey === "test-router-key", "Free seçimi diğer sağlayıcıların anahtarını korur");
+  const toggle = document.querySelector('.memory-toggle input');
+  check(toggle.checked && !toggle.disabled && document.querySelector('.memory-settings').textContent.includes('3 ilan'), "Hafıza durumu worker üzerinden yüklenir");
+  toggle.click(); await pause();
+  check(!toggle.checked && memoryCalls.at(-1).type === 'SET_MEMORY_ENABLED', "Hafıza kapatma worker'a iletilir");
+  const buttons = document.querySelectorAll('.memory-settings button');
+  buttons[0].click(); await pause();
+  check(memory.cvCount === 0 && memory.jobCount === 3, "CV yenileme ilanları korur");
+  denyWrite = true; buttons[1].click(); await pause();
+  check(document.querySelector('.memory-settings [role=status]').textContent.includes('tamamlanamadı') && !buttons[1].disabled, "Hafıza hatasında kontrol tekrar kullanılabilir");
+  denyWrite = false; buttons[1].click(); await pause();
+  check(memory.jobCount === 0 && document.querySelector('.memory-settings').textContent.includes('0 ilan'), "Hafıza temizlenince kayıt sayıları güncellenir");
   results.textContent += "\nTüm ayarlar testleri geçti.";
 }
 run().catch(error => { results.textContent += "\nBAŞARISIZ: " + error.message; });

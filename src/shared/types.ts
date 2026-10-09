@@ -70,9 +70,10 @@ export type ChatProgress = { type: "status"; text: string } | { type: "text"; co
 export type ChatStreamEvent = ChatProgress | { type: "done"; result: ChatResult };
 
 export interface ExtensionMessage {
-  type: "GET_JOB_VISIT" | "GET_JOB" | "CHAT_JOB" | "OPEN_OPTIONS";
+  type: "GET_JOB_VISIT" | "GET_JOB" | "CHAT_JOB" | "OPEN_OPTIONS" | "GET_MEMORY_STATUS" | "SET_MEMORY_ENABLED" | "CLEAR_MEMORY" | "REFRESH_CV_MEMORY";
   jobId?: unknown;
   messages?: unknown;
+  enabled?: unknown;
 }
 
 export interface CompanyProfile {
