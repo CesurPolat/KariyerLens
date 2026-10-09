@@ -59,6 +59,15 @@ async function run() {
   check(key.value === "draft-openai-key", "Sağlayıcılar arasında kaydedilmemiş taslak korunur");
   changeInput(model, " new-model "); await pause(); submit(); await pause();
   check(writes.at(-1).chatSettings.providers.openai.model === "new-model" && writes.at(-1).chatSettings.providers.openrouter.apiKey === "test-router-key", "Kaydet alanları temizler ve diğer sağlayıcıyı korur");
+  check(document.querySelector("#model-select").value === "custom" && model.value === "new-model", "Kayıtlı özel model korunur");
+  const modelSelect = document.querySelector("#model-select");
+  modelSelect.value = "gpt-4.1-mini"; modelSelect.dispatchEvent(new Event("change", { bubbles: true })); await pause();
+  check(!document.querySelector("#model"), "Hazır model seçilince elle giriş alanı kapanır");
+  submit(); await pause();
+  check(writes.at(-1).chatSettings.providers.openai.model === "gpt-4.1-mini", "Hazır modelin gerçek kimliği kaydedilir");
+  modelSelect.value = "custom"; modelSelect.dispatchEvent(new Event("change", { bubbles: true })); await pause();
+  model = document.querySelector("#model");
+  check(model && !model.disabled, "Özel model seçilince kimlik girişi açılır");
   denyWrite = true; changeInput(model, "retry-model"); await pause(); submit(); await pause();
   check(document.querySelector("#status").textContent.includes("kaydedilemedi") && model.value === "retry-model" && !key.disabled, "Kaydet hatasında taslak korunur ve yeniden denenebilir");
   denyWrite = false; document.querySelector("#delete").click(); await pause();

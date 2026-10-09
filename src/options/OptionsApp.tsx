@@ -4,12 +4,19 @@ import { useEffect, useState } from "react";
 import { KeyRound, Save, Sparkles, Trash2 } from "lucide-react";
 import type { ChatSettings, Provider, ProviderSettings } from "../shared/types.js";
 
+const modelOptions: Record<Provider, { id: string; name: string }[]> = {
+  openai: [{ id: "gpt-4.1-mini", name: "GPT-4.1 mini" }, { id: "gpt-4.1", name: "GPT-4.1" }],
+  openrouter: [{ id: "openai/gpt-4.1-mini", name: "OpenAI · GPT-4.1 mini" }, { id: "google/gemini-2.5-flash", name: "Google · Gemini 2.5 Flash" }],
+  cesurpolat: [],
+};
+
 type Configs = Record<Provider, ProviderSettings>;
 const selectProvider = (value: unknown): Provider => value === "openrouter" || value === "cesurpolat" ? value : "openai";
 
 export function OptionsApp() {
   const [provider, setProvider] = useState<Provider>("openai");
   const [configs, setConfigs] = useState<Configs>({ openai: {}, openrouter: {}, cesurpolat: {} });
+  const [customModels, setCustomModels] = useState<Record<Provider, boolean>>({ openai: false, openrouter: false, cesurpolat: false });
   const [memory, setMemory] = useState<MemoryStatus | null>(null);
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [memoryStatus, setMemoryStatus] = useState("");
@@ -40,6 +47,8 @@ export function OptionsApp() {
 
   const config = configs[provider];
   const isFree = provider === "cesurpolat";
+  const models = modelOptions[provider];
+  const isCustomModel = customModels[provider] || Boolean(config.model && !models.some(model => model.id === config.model));
   const disabled = !ready || saving;
   function update(field: keyof ProviderSettings, value: string) {
     setConfigs(previous => ({ ...previous, [provider]: { ...previous[provider], [field]: value } }));
@@ -86,10 +95,22 @@ export function OptionsApp() {
       <label htmlFor="api-key"><KeyRound size={16} aria-hidden="true" />API anahtarı</label>
       <input id="api-key" type="password" autoComplete="off" spellCheck={false} required disabled={disabled}
         value={config.apiKey || ""} onChange={event => update("apiKey", event.target.value)} />
-      <label htmlFor="model">Model kimliği</label>
-      <input id="model" type="text" autoComplete="off" spellCheck={false} required maxLength={200} disabled={disabled}
-        value={config.model || ""} onChange={event => update("model", event.target.value)} />
-      <p id="model-hint">{provider === "openai" ? "OpenAI hesabında erişebildiğin modelin tam kimliğini gir." : "OpenRouter model kimliğini sağlayıcı/model biçiminde gir."}</p>
+      <label htmlFor="model-select">Model</label>
+      <select id="model-select" value={isCustomModel ? "custom" : config.model || ""} required disabled={disabled}
+        onChange={event => {
+          const custom = event.target.value === "custom";
+          setCustomModels(previous => ({ ...previous, [provider]: custom }));
+          if (!custom) update("model", event.target.value); else setStatus("");
+        }}>
+        <option value="" disabled>Model seç</option>
+        {models.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+        <option value="custom">Özel model · Kimliğini elle gir</option>
+      </select>
+      {isCustomModel && <><label htmlFor="model">Özel model kimliği</label>
+        <input id="model" type="text" autoComplete="off" spellCheck={false} required maxLength={200} disabled={disabled}
+          placeholder={provider === "openai" ? "Modelin tam kimliği" : "sağlayıcı/model"}
+          value={config.model || ""} onChange={event => update("model", event.target.value)} /></>}
+      <p id="model-hint">{provider === "openai" ? "Listeden seç veya Özel model ile hesabında erişebildiğin modelin tam kimliğini gir." : "Listeden seç veya Özel model ile sağlayıcı/model biçimindeki kimliği gir."}</p>
       <p>Anahtar yalnız bu bilgisayarda uzantının yerel depolamasında saklanır; şifreli bir kasa değildir. Kariyer.net sayfasına veya sohbet kartına aktarılmaz. Sohbet geçmişi sayfa yenilenince silinir.</p>
       </>}
       <div className="actions"><button type="submit" disabled={disabled}><Save size={18} aria-hidden="true" />{saving ? "Kaydediliyor…" : "Kaydet"}</button>
