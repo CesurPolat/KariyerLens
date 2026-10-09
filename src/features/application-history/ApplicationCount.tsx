@@ -14,19 +14,26 @@ const shortTime = (value: number) => new Intl.DateTimeFormat("tr-TR", {
 function VisitChart({ measurements }: { measurements: JobVisitMeasurement[] }) {
   const [selected, setSelected] = useState(measurements.length - 1);
   const first = measurements[0], last = measurements.at(-1)!;
-  const maxCount = Math.max(1, ...measurements.map(point => point.count));
+  const counts = measurements.map(point => point.count);
+  const minCount = Math.min(...counts);
+  const maxCount = Math.max(...counts);
+  const axisStep = Math.max(1, 10 ** Math.floor(Math.log10(Math.max(2, maxCount - minCount))));
+  const axisMin = Math.max(0, Math.floor(minCount / axisStep) * axisStep - (minCount === maxCount ? axisStep : 0));
+  const axisMax = Math.max(axisMin + 2 * axisStep, Math.ceil(maxCount / axisStep) * axisStep);
+  const axisRange = axisMax - axisMin;
+  const ticks = [axisMin, Math.round((axisMin + axisMax) / 2), axisMax];
   const maxTime = last.timestamp - first.timestamp;
   const points = measurements.map(point => ({
     ...point,
     x: maxTime > 0 ? 58 + (point.timestamp - first.timestamp) / maxTime * 354 : 235,
-    y: 174 - point.count / maxCount * 144,
+    y: 174 - (point.count - axisMin) / axisRange * 144,
   }));
   const active = measurements[selected] || last;
   return <>
     <svg viewBox="0 0 440 230" role="group" aria-label="Ziyaret zamanına göre başvuru sayısı">
-      {[0, 0.5, 1].map(ratio => <g key={ratio}>
-        <line x1="58" x2="412" y1={174 - ratio * 144} y2={174 - ratio * 144} className="grid" />
-        <text x="50" y={178 - ratio * 144} textAnchor="end">{formatNumber(Math.round(maxCount * ratio))}</text>
+      {ticks.map(value => <g key={value}>
+        <line x1="58" x2="412" y1={174 - (value - axisMin) / axisRange * 144} y2={174 - (value - axisMin) / axisRange * 144} className="grid" />
+        <text x="50" y={178 - (value - axisMin) / axisRange * 144} textAnchor="end">{formatNumber(value)}</text>
       </g>)}
       <text x="58" y="17">Başvuru sayısı</text>
       <text x="58" y="195">{shortTime(first.timestamp)}</text>
@@ -95,7 +102,7 @@ export function ApplicationCount({ applicationCount, history }: { applicationCou
     <button ref={trigger} className="count-button" type="button" aria-expanded={open} aria-controls={panelId} aria-haspopup="dialog"
       onClick={event => { event.stopPropagation(); setOpen(!open); }}>
       <span><strong>{count === null ? applicationCount : formatNumber(count)}</strong> başvuru <span aria-hidden="true">▾</span></span>
-      {comparison && <span className="comparison">{comparison}</span>}
+      {delta !== null && <span className="comparison" title={comparison ?? undefined}>{delta === 0 ? "Değişmedi" : (delta > 0 ? "+" : "−") + formatNumber(Math.abs(delta))}</span>}
     </button>
     {open && <div ref={panel} id={panelId} className="history-panel" role="dialog" aria-modal="false" aria-label="Başvuru geçmişi" tabIndex={-1}
       style={{ left: placement.left, top: placement.top, width: placement.width }} onClick={event => event.stopPropagation()}>
