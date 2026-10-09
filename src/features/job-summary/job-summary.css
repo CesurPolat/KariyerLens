@@ -48,3 +48,5 @@ h2{margin:5px 0 0;font-size:20px;line-height:1.25;color:#f5f3ff}
 .chip-review{gap:6px;padding-inline:6px}
 .chip-review .chip-icon{flex-basis:20px;width:20px}
 .chip-review .chip-value{white-space:nowrap}
+
+.dashboard-tracking{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0}.dashboard-tracking button{border:1px solid #dfd5ef;background:#f5f0fc;color:#7954b5;border-radius:8px;padding:9px 12px;font:inherit;font-size:12px;cursor:pointer}.dashboard-tracking button:disabled{opacity:.55;cursor:default}.dashboard-tracking button:focus-visible{outline:2px solid #7954b5;outline-offset:2px}.dashboard-tracking span{font-size:12px;color:#7a6b95;width:100%;line-height:1.5}

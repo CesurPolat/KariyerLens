@@ -1,3 +1,5 @@
+import { handleDashboard, analyzeDashboard, dashboardFailure } from "../dashboard/service.js";
+import { jobIdFromUrl } from "../dashboard/data.js";
 import { clearMemory, getMemoryJob, getMemoryStatus, hashMemorySession, listMemoryJobs, memoryJobContext, memoryRevision, rememberJob, setMemoryEnabled, withResumeMemory } from "../features/memory/chat-memory.js";
 import { pruneJobVisitHistory, recordJobVisit } from "../features/application-history/job-visit-history.js";
 import { getJob, validateJobId } from "../shared/kariyer/kariyer-api.js";
@@ -7,7 +9,7 @@ import { MESSAGE_TYPES } from "../shared/messages.js";
 import type { ChatSettings, CompanyStatsResult, ExtensionMessage, JobResult, JobSuccess } from "../shared/types.js";
 import { z } from "zod";
 import { callKariyerTool, KARIYER_TOOLS } from "../shared/kariyer/kariyer-tools.js";
-import { getKariyerCredentials, observeKariyerSession } from "../shared/kariyer/kariyer-session.js";
+import { getKariyerCredentials, observeKariyerSession, kariyerSessionReady } from "../shared/kariyer/kariyer-session.js";
 
 observeKariyerSession();
 
@@ -16,7 +18,7 @@ const cache = new Map<string, JobSuccess>();
 const chatSizeSchema = z.object({ width: z.number().finite().positive().max(10000), height: z.number().finite().positive().max(10000) }).strict();
 let sizeWrites: Promise<unknown> = Promise.resolve();
 
-const storageReady = chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
+const storageReady = Promise.all([chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" }), kariyerSessionReady()]);
 storageReady.catch(() => {});
 void storageReady.then(() => pruneJobVisitHistory()).catch(() => {});
 
@@ -144,7 +146,36 @@ async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.M
   }, streaming);
 }
 
+const dashboardUrl = () => chrome.runtime.getURL("src/dashboard/dashboard.html");
+const isDashboardSender = (sender: chrome.runtime.MessageSender) => sender.id === chrome.runtime.id && sender.url === dashboardUrl();
+export async function openDashboard() {
+  const url = dashboardUrl();
+  const existing = (await chrome.tabs.query({})).find(tab => tab.url === url);
+  if (existing?.id !== undefined) {
+    await chrome.tabs.update(existing.id, { active: true });
+    if (existing.windowId !== undefined) await chrome.windows.update(existing.windowId, { focused: true });
+  } else await chrome.tabs.create({ url });
+}
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (sender.id !== chrome.runtime.id) return;
+  if (message?.type === MESSAGE_TYPES.DASHBOARD || message?.type === MESSAGE_TYPES.TRACK_JOB || message?.type === MESSAGE_TYPES.OPEN_DASHBOARD) {
+    const fromDashboard = isDashboardSender(sender);
+    const fromJob = Boolean(sender.tab && jobIdFromUrl(sender.url ?? ""));
+    if (!fromDashboard && !(fromJob && [MESSAGE_TYPES.TRACK_JOB, MESSAGE_TYPES.OPEN_DASHBOARD].includes(message.type))) {
+      sendResponse({ ok: false, code: "UNAUTHORIZED", message: "Dashboard erişimi yetkisiz." }); return;
+    }
+    if (message.type === MESSAGE_TYPES.OPEN_DASHBOARD) {
+      openDashboard().then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false, code: "INTERNAL_ERROR", message: "Dashboard açılamadı." })); return true;
+    }
+    if (message.type === MESSAGE_TYPES.TRACK_JOB && (!fromJob || String(message.jobId) !== jobIdFromUrl(sender.url ?? ""))) {
+      sendResponse({ ok: false, code: "INVALID_ARGUMENTS", message: "Açık ilan değişti." }); return;
+    }
+    storageReady.then(() => handleDashboard(message.type === MESSAGE_TYPES.TRACK_JOB ? { action: "track", jobId: message.jobId } : message.payload, fromDashboard ? message.scope : undefined, fromDashboard))
+      .then(result => sendResponse(fromDashboard ? result : { ok: true, notice: result.notice }))
+      .catch(error => sendResponse(dashboardFailure(error)));
+    return true;
+  }
+
   if (sender.id !== chrome.runtime.id || ![MESSAGE_TYPES.GET_JOB, MESSAGE_TYPES.GET_JOB_VISIT, MESSAGE_TYPES.CHAT_JOB, MESSAGE_TYPES.OPEN_OPTIONS, MESSAGE_TYPES.GET_MEMORY_STATUS, MESSAGE_TYPES.SET_MEMORY_ENABLED, MESSAGE_TYPES.CLEAR_MEMORY, MESSAGE_TYPES.REFRESH_CV_MEMORY, MESSAGE_TYPES.GET_CHAT_SIZE, MESSAGE_TYPES.SET_CHAT_SIZE].includes(message?.type)) return;
   if (sender.tab && !/^https:\/\/(?:[\w-]+\.)*kariyer\.net\//i.test(sender.url || "")) return;
   handleMessage(message, sender).then(sendResponse).catch(() => sendResponse({ ok: false, code: "INTERNAL_ERROR", message: "İstek tamamlanamadı. Uzantıyı yeniden yükleyip deneyin." }));
@@ -153,6 +184,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onConnect.addListener((port) => {
   const sender = port.sender;
+  if (port.name === MESSAGE_TYPES.DASHBOARD_ANALYSIS) {
+    if (!sender || !isDashboardSender(sender)) { port.disconnect(); return; }
+    const controller = new AbortController(); let started = false, closed = false;
+    port.onDisconnect.addListener(() => { closed = true; controller.abort(); });
+    const post = (event: unknown) => { if (!closed) { try { port.postMessage(event); } catch { closed = true; controller.abort(); } } };
+    port.onMessage.addListener(message => {
+      if (started) return; started = true;
+      storageReady.then(() => analyzeDashboard(message, { signal: controller.signal, onProgress: post }))
+        .then(result => post({ type: "done", result })).catch(error => post({ type: "done", result: dashboardFailure(error) }));
+    });
+    return;
+  }
   if (port.name !== MESSAGE_TYPES.CHAT_STREAM || sender?.id !== chrome.runtime.id || !sender.tab
     || !/^https:\/\/(?:[\w-]+\.)*kariyer\.net\//i.test(sender.url || "")) { port.disconnect(); return; }
   const controller = new AbortController();
@@ -172,4 +215,4 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
-chrome.action.onClicked.addListener(() => { chrome.runtime.openOptionsPage().catch(() => {}); });
+chrome.action.onClicked.addListener(() => { openDashboard().catch(() => {}); });

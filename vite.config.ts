@@ -65,7 +65,7 @@ export default defineConfig(({ mode }) => ({
       build: {
         // Watch rebuilds must not delete the other environments' outputs.
         emptyOutDir: mode !== "development",
-        rolldownOptions: { input: fileURLToPath(new URL("src/options/options.html", import.meta.url)) },
+        rolldownOptions: { input: { options: fileURLToPath(new URL("src/options/options.html", import.meta.url)), dashboard: fileURLToPath(new URL("src/dashboard/dashboard.html", import.meta.url)) } },
       },
     },
     background: scriptEnvironment("src/background/service-worker.ts", "es"),

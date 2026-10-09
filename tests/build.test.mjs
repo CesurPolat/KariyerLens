@@ -10,15 +10,17 @@ test("built extension includes every manifest asset and local options resource",
   const manifest = JSON.parse(await readFile(new URL("manifest.json", dist), "utf8"));
   const sourceManifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
   assert.deepEqual(manifest, sourceManifest);
-  const assets = [manifest.background.service_worker, manifest.options_ui.page,
+  const assets = ["src/dashboard/dashboard.html", manifest.background.service_worker, manifest.options_ui.page,
     ...Object.values(manifest.icons), ...Object.values(manifest.action.default_icon),
     ...manifest.content_scripts.flatMap(({ js }) => js)];
   for (const asset of assets) await access(new URL(asset, dist));
-  const optionsPage = new URL(manifest.options_ui.page, dist);
-  const html = await readFile(optionsPage, "utf8");
-  for (const [, asset] of html.matchAll(/(?:src|href)="([^"]+)"/g)) {
-    assert.doesNotMatch(asset, /^https?:/);
-    await access(new URL(asset, optionsPage));
+  for (const pagePath of [manifest.options_ui.page, "src/dashboard/dashboard.html"]) {
+    const optionsPage = new URL(pagePath, dist);
+    const html = await readFile(optionsPage, "utf8");
+    for (const [, asset] of html.matchAll(/(?:src|href)="([^"]+)"/g)) {
+      assert.doesNotMatch(asset, /^https?:/);
+      await access(new URL(asset, optionsPage));
+    }
   }
   for (const script of manifest.content_scripts.flatMap(({ js }) => js)) {
     // Content scripts must parse as classic scripts, without import/export syntax.

@@ -70,7 +70,9 @@ export type ChatProgress = { type: "status"; text: string } | { type: "text"; co
 export type ChatStreamEvent = ChatProgress | { type: "done"; result: ChatResult };
 
 export interface ExtensionMessage {
-  type: "GET_JOB_VISIT" | "GET_JOB" | "CHAT_JOB" | "OPEN_OPTIONS" | "GET_MEMORY_STATUS" | "SET_MEMORY_ENABLED" | "CLEAR_MEMORY" | "REFRESH_CV_MEMORY" | "GET_CHAT_SIZE" | "SET_CHAT_SIZE";
+  payload?: unknown;
+  scope?: unknown;
+  type: "DASHBOARD" | "TRACK_JOB" | "OPEN_DASHBOARD" | "GET_JOB_VISIT" | "GET_JOB" | "CHAT_JOB" | "OPEN_OPTIONS" | "GET_MEMORY_STATUS" | "SET_MEMORY_ENABLED" | "CLEAR_MEMORY" | "REFRESH_CV_MEMORY" | "GET_CHAT_SIZE" | "SET_CHAT_SIZE";
   jobId?: unknown;
   messages?: unknown;
   enabled?: unknown;

@@ -51,10 +51,24 @@ Sohbet kartı, ilan özeti/SVG gösterge ve ayarlar sayfası React + TSX compone
 
 ## 🚀 Nasıl çalışır?
 
+### Kariyer dashboard’u
+
+Uzantı simgesi **Başvurularım**, **CV A/B Testi** ve **Bana Uygun İlanlar** bölümlerini içeren tam sayfa dashboard’u açar; açık dashboard sekmesi varsa yeniden kullanılır. Önce Kariyer.net’te oturum açıp profil sayfanızı yenileyin, ardından dashboard’da **Yeniden bağlan** düğmesine basın. İlan araması için Kariyer.net profilindeki “Sana Uygun İlanlar” bölümünün oturum başlığının da gözlemlenmesi gerekebilir.
+
+- **Başvurularım:** İlan sayfasındaki **Takibe ekle** düğmesini kullanın veya dashboard’a ilan bağlantısı girin. Durum, başvuru tarihi, takip tarihi, notlar, dönüş bilgisi ve manuel etkileşimleri düzenleyebilirsiniz. **Başvuruları yenile**, yalnız takip edilen ilanların API bilgilerini alır. CV görüntülenmesi görüşme olarak yorumlanmaz; manuel süreç durumu ve notlar yenilemede korunur. **Başvurularımı içe aktar**, Kariyer.net’in “Başvurduğum İlanlar” filtresini sayfa sayfa okuyup mevcut başvuruları ekler. İşlem yalnız düğmeyle başlar; aynı ilan tekrar eklenmez, notlar ve CV sürümü seçimleri korunur. Detayı alınamayan kayıtlarda tarih/CV tahmin edilmez; hata gösterilir ve daha sonra yenilenebilir. İstek sınırı veya 500 kayıt sınırında işlem durur; alınan kayıtlar korunur.
+- **CV A/B Testi:** **CV’leri getir** ile iki farklı Kariyer.net CV’sini seçip test oluşturun. İçerikler o tarihte sabitlenir; CV’yi sonradan değiştirmeniz eski testi değiştirmez. Başvuru detayından kullanılan A/B sürümünü seçin. Kimlik eşleşmesi yalnız öneri sunar; hangi sabit içeriğin gönderildiğini siz doğrularsınız. Tarih aralığındaki, CV sürümü atanmış ve başvuru tarihi bulunan kayıtlar görüntülenme, dönüş, mülakat ve teklif oranlarına girer. Tekrar görüntülenmeler aynı başvuruyu birden fazla saymaz. Karşılaştırma gözlemseldir; kazanan CV belirlenmez.
+- **Bana Uygun İlanlar:** İlanlar yalnız **Yenile** veya sayfalama düğmesine bastığınızda alınır. İlk yenileme API’nin filtre seçeneklerini getirir. Son 7 gün içinde yayımlananlar, tarihi bilinmeyenler ve diğer ilanlar ayrı gösterilir; ilk görülme tarihi yayın tarihi değildir. Öneriler Kariyer.net profilinize dayanır. Seçtiğiniz CV yalnız **Uyumu analiz et** işleminde kullanılır.
+
+**A/B analiz et** ve **Uyumu analiz et**, ilgili ilanı ve seçilen/sabit CV içeriklerini mevcut AI sağlayıcınıza gönderir. Analiz otomatik başlamaz; **Durdur** düğmesi isteği iptal eder. CV içeriği API bütçesi nedeniyle kısaltıldıysa test kartında belirtilir. Dashboard analizlerinde başka profil/CV araçları çağrılmaz.
+
+Dashboard kayıtları `chrome.storage.local` içinde, doğrulanmış aday kimliğinin hash’i altında ayrı tutulur. Token yenilenmesi kayıtları değiştirmez; hesap değiştiğinde önceki hesabın kayıtları gösterilmez ve açık ekranın eski hesaba ait işlemleri reddedilir. Token diske yazılmaz; içerik betiklerine kapalı, bellekte çalışan geçici oturum alanında tutulur. Arka plan worker’ı durup yeniden başladığında geri yüklenir; tarayıcı/uzantı yeniden başlatıldığında veya 30 dakikalık süre dolduğunda Kariyer.net sayfasından yeniden yakalanması gerekir. Dashboard, sohbet hafızasından bağımsızdır; **Hafızayı temizle** dashboard kayıtlarını silmez. Depolama bütçesi hesap başına 3 MiB, takip sınırı 500 ilan ve test sınırı 20’dir; sınıra ulaşılırsa mevcut kayıtlar korunur.
+
+Kariyer.net API’lerinin canlı uyumluluğu bu dashboard değişikliğinde doğrulanamadı: tarayıcı aracının URL politikası extension sayfasına erişimi engelledi. API ve arayüz senaryoları taklit yanıtlarla doğrulandı.
+
 ### Asistan kurulumu
 
 1. Değişikliklerden sonra `chrome://extensions/` üzerinden uzantıyı yeniden yükleyin, ardından ilan sayfasını yenileyin.
-2. Uzantı simgesine veya sohbet kartındaki **Ayarlar** düğmesine tıklayın.
+2. Uzantı simgesine tıklayıp dashboard’daki **Ayarlar** düğmesini veya sohbet kartındaki **Ayarlar** düğmesini kullanın.
 3. **OpenAI**, **OpenRouter** veya **KariyerLens Free** seçin. OpenAI ve OpenRouter için kendi API anahtarınızı ve erişebildiğiniz modelin tam kimliğini girip **Kaydet** düğmesine basın. OpenRouter kimlikleri `sağlayıcı/model` biçimindedir. KariyerLens Free seçildiğinde anahtar ve model alanları gizlenir; yalnız Kaydet’e basın. Hizmet `https://llm.cesurpolat.dev/v1/chat/completions` adresini kullanır, anahtar gönderilmez ve modeli hizmet seçer.
 4. Sağ alttaki sohbet baloncuğuna tıklayıp sorunuzu gönderin. Panel sayfayı kaydırırken ekranda kalır; × veya Escape ile kapanır. Kapatıp açınca sohbet korunur; ilan değişince temizlenir. Enter gönderir; Shift+Enter yeni satır açar.
 
@@ -102,7 +116,9 @@ API anahtarları `chrome.storage.local` içinde yalnız bu bilgisayarda saklanı
 `npm test`, derleme ve paket yapısı kontrolleriyle birlikte taklit API ve service worker testlerini çalıştırır. `npm run typecheck`, strict TypeScript kontrolünü tek başına çalıştırır.
 Tarayıcı senaryoları için `npm run test:browser` çalıştırıp `http://127.0.0.1:4173/tests/browser.html` adresini açın. Bu komut önce uzantıyı derler; tarayıcı senaryoları `dist/` içindeki gerçek çıktıları kullanır. Testler gerçek sağlayıcıya istek göndermez ve API anahtarı gerektirmez.
 Şirket kartı senaryoları için aynı sunucuda `http://127.0.0.1:4173/tests/company-stats.html` adresini açın; profil yanıtları taklit edilir.
-React ilan özeti senaryoları: `http://127.0.0.1:4173/tests/job-summary.html`. React ayarlar senaryoları: `http://127.0.0.1:4173/tests/options.html`; depolama erişim hatası için `?storage-failure` ekleyin. Bu sayfalar derlenmiş uzantı kodunu, örnek ilan verilerini ve taklit Chrome depolamasını kullanır; gerçek API anahtarları okunmaz veya kaydedilmez.
+React ilan özeti senaryoları: `http://127.0.0.1:4173/tests/job-summary.html`. React ayarlar senaryoları: `http://127.0.0.1:4173/tests/options.html`; depolama erişim hatası için `?storage-failure` ekleyin. Dashboard testleri: `http://127.0.0.1:4173/tests/dashboard.html`; `?empty`, `?auth`, `?one-cv`, `?analysis-error` hata/boş senaryolarını, `?interactive` örnek verilerle serbest kullanımı açar. 390 piksel görünüm: `http://127.0.0.1:4173/tests/dashboard-mobile.html`. Dashboard testleri gerçek hesap, depolama veya AI sağlayıcısına erişmez.
+
+Bu sayfalar derlenmiş uzantı kodunu, örnek ilan verilerini ve taklit Chrome depolamasını kullanır; gerçek API anahtarları okunmaz veya kaydedilmez.
 
 ## 🛠️ Teknoloji
 

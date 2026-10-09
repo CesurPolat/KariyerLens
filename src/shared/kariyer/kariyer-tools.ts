@@ -72,7 +72,7 @@ function sanitize(value: unknown, state: { remaining: number; characters: number
   return value;
 }
 
-export async function callKariyerTool(name: string, input: unknown, jobId: string, credentials: KariyerCredentials = {}, fetcher: typeof fetch = fetch, signal?: AbortSignal): Promise<KariyerToolResult> {
+export async function callKariyerTool(name: string, input: unknown, jobId: string, credentials: KariyerCredentials = {}, fetcher: typeof fetch = fetch, signal?: AbortSignal, project?: (data: unknown) => unknown): Promise<KariyerToolResult> {
   const endpoint = KARIYER_TOOLS.find(item => item.name === name);
   if (!endpoint) return failure("UNKNOWN_TOOL", "Bilinmeyen Kariyer.net aracı.");
   const parsed = endpoint.schema.safeParse(input);
@@ -99,7 +99,7 @@ export async function callKariyerTool(name: string, input: unknown, jobId: strin
     if ((envelope.statusCode !== undefined && !["Success", 200, "200"].includes(envelope.statusCode as string | number)) || header.isSuccess === false || envelope.isSuccess === false || record(envelope.body).isSuccess === false)
       return failure("API_ERROR", "Kariyer.net işlemi başarısız olarak bildirdi.");
     const state = { remaining: 2000, characters: 30000, truncated: false };
-    let data = envelope.data ?? envelope.result ?? envelope.body ?? raw;
+    let data: unknown = envelope.data ?? envelope.result ?? envelope.body ?? raw;
     // The list's opaque CV identifier is needed for get_resume, but is not a session credential.
     if (name === "get_resumes" && Array.isArray(record(data).resumeList)) {
       data = { ...record(data), resumeList: (record(data).resumeList as unknown[]).map(item => {
@@ -107,6 +107,7 @@ export async function callKariyerTool(name: string, input: unknown, jobId: strin
         return { ...resume, ...(typeof resume.encryptedId === "string" ? { resumeId: resume.encryptedId } : {}) };
       }) };
     }
+    if (project) data = project(data);
     return { ok: true, data: sanitize(data, state), truncated: state.truncated, methodAssumed: Boolean(endpoint.assumedGet) };
   } catch (error) {
     if (signal?.aborted) return failure("CANCELLED", "İstek durduruldu.");

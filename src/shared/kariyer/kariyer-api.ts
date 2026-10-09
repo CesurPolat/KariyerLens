@@ -70,7 +70,7 @@ export function normalizeJob(raw: unknown, jobId: string): Job | null {
   };
 }
 
-export async function getJob(jobIdInput: unknown): Promise<JobResult> {
+export async function getJob(jobIdInput: unknown, signal?: AbortSignal): Promise<JobResult> {
   const jobId = validateJobId(jobIdInput);
   if (!jobId) return error("INVALID_JOB_ID", "Geçerli bir sayısal jobId girin.");
 
@@ -84,7 +84,7 @@ export async function getJob(jobIdInput: unknown): Promise<JobResult> {
       method: "GET",
       credentials: "include",
       headers: { Accept: "application/json" },
-      signal: controller.signal,
+      signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
     });
     const contentType = response.headers.get("content-type") || "";
     const body = await response.text();
@@ -119,6 +119,7 @@ export async function getJob(jobIdInput: unknown): Promise<JobResult> {
     if (!data) return error("INVALID_RESPONSE", "İlan verisi beklenen yapıda değil.");
     return { ok: true, data, fetchedAt: Date.now() };
   } catch (cause) {
+    if (signal?.aborted) return error("CANCELLED", "İstek durduruldu.");
     if (cause instanceof Error && cause.name === "AbortError") return error("TIMEOUT", "İstek zaman aşımına uğradı.");
     return error("NETWORK_ERROR", "Ağ isteği tamamlanamadı.");
   } finally {
