@@ -13,6 +13,7 @@ if (!params.has("empty") && !params.has("auth")) {
   state.applications[0].api.events = [{ id: "view", at: today, text: "Özgeçmişin Görüntülendi", viewed: true, source: "api" }];
   state.experiments = [{ id: "test-1", name: "Teknik detay vs. proje odaklı", createdAt: Date.now(), variants: [variant("A", "Teknik CV"), variant("B", "Proje Odaklı CV")] }];
 }
+if (params.has("table")) state.applications.push(...Array.from({ length: 20 }, (_, i) => example(String(800 + i), "Pozisyon " + i, "Şirket " + i, "applied")));
 const resumes = [{ id: "cv-A", name: "Teknik CV", updatedAt: today }, { id: "cv-B", name: "Proje Odaklı CV", updatedAt: today }];
 function events() { const handlers = new Set(); return { addListener(fn) { handlers.add(fn); }, emit(value) { for (const fn of handlers) fn(value); } }; }
 window.chrome = { runtime: {
@@ -67,6 +68,20 @@ async function run() {
   check(!calls.some(c => c.payload?.action === "search"), "Açılışta ilan araması yapılmaz");
   if (params.has("interactive")) { results.textContent = "Örnek veriler · Gerçek hesaba, depolamaya veya AI sağlayıcısına erişilmez."; return; }
   if (params.has("auth")) { check(!document.querySelector(".stats"), "Oturum yokken kişisel kayıtlar gösterilmez"); check(document.querySelector('[role="alert"]'), "Oturum hatası görünür"); return; }
+  if (params.has("table")) {
+    check(document.querySelectorAll(".application-table tbody tr").length === 10, "Uzun liste ilk sayfada 10 satır gösterir");
+    button("Sonraki").click(); await pause();
+    check(document.querySelectorAll(".application-table tbody tr").length === 10 && document.querySelector(".table-pagination").textContent.includes("11–20"), "İkinci sayfaya geçilir");
+    button("Sonraki").click(); await pause();
+    check(document.querySelectorAll(".application-table tbody tr").length === 3 && button("Sonraki").disabled, "Son sayfa kalan kayıtları gösterir");
+    input(document.querySelector('[aria-label="Başlık veya şirket ara"]'), "Frontend"); await pause();
+    check(document.querySelectorAll(".application-table tbody tr").length === 1 && document.querySelector(".table-pagination").textContent.includes("1–1"), "Arama sayfalamayı sıfırlar");
+    button("Detay").click(); await pause();
+    check(document.querySelector("dialog:modal") && document.querySelector(".detail-panel"), "Detay sayfayı uzatmadan yan panelde açılır");
+    document.querySelector('[aria-label="Detayı kapat"]').click(); await pause();
+    check(!document.querySelector("dialog"), "Detay paneli kapanır ve tablo kalır");
+    results.textContent += "\nTüm dashboard tarayıcı testleri geçti."; return;
+  }
   if (params.has("empty")) {
     check(document.body.textContent.includes("Başvurularını içe aktar veya ilan ekle"), "İlk kullanım boş durumu görünür");
     check(!button("Başvurularımı içe aktar").disabled, "Boş listede içe aktarma kullanılabilir");
@@ -85,6 +100,7 @@ async function run() {
   input(document.querySelector('[aria-label="Manuel etkileşim açıklaması"]'), "Teknik görüşme"); await pause();
   document.querySelector(".detail-panel form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await pause();
   check(state.applications[0].manualEvents[0].text === "Teknik görüşme", "Manuel etkileşimler eklenir ve düzenlenir");
+  document.querySelector('[aria-label="Detayı kapat"]').click(); await pause();
   button("Başvurularımı içe aktar").click();
   await until(() => calls.filter(c => c.payload?.action === "importApplications").length === 2 && !button("Başvurularımı içe aktar").disabled);
   check(document.querySelectorAll(".application-table tbody tr").length === 6, "İçe aktarma tüm sayfaları getirir");
@@ -104,9 +120,13 @@ async function run() {
     check(state.experiments[0].name === "Arayüz CV testi", "İki CV ile yeni test oluşturulur");
   }
   button("Bana Uygun İlanlar").click(); await pause(); check(!calls.some(c => c.payload?.action === "search"), "İlan bölümüne geçiş arama başlatmaz");
-  button("Yenile").click(); await pause(); check(document.querySelectorAll(".discovery-card").length === 3, "İlan kartları çizilir");
+  button("Yenile").click(); await pause(); check(document.querySelectorAll(".discovery-table tbody tr").length === 3, "İlanlar tek tabloda çizilir");
   check(document.body.textContent.includes("Yayın tarihi bilinmeyenler"), "Tarihi bilinmeyen ilanlar ayrılır");
   check(document.body.textContent.includes("Diğer önerilen ilanlar"), "Eski ilanlar yeni diye gösterilmez");
+  const dateFilter = document.querySelector('[aria-label="İlan yayın tarihi filtresi"]');
+  dateFilter.value = "unknown"; dateFilter.dispatchEvent(new Event("change", { bubbles: true })); await pause();
+  check(document.querySelectorAll(".discovery-table tbody tr").length === 1 && document.querySelector(".discovery-table").textContent.includes("Full Stack"), "Tabloda yayın tarihi grubu filtrelenir");
+  dateFilter.value = "all"; dateFilter.dispatchEvent(new Event("change", { bubbles: true })); await pause();
   button("CV’leri getir").click(); await pause(); const select = document.querySelector(".cv-choice select"); select.value = "cv-A"; select.dispatchEvent(new Event("change", { bubbles: true })); await pause();
   button("Uyumu analiz et").click(); await pause(); button("Durdur").click(); await pause(); check(document.querySelector(".analysis-panel").textContent.includes("Analiz durduruldu.") && !button("Durdur"), "AI analizi durdurulabilir");
   button("Uyumu analiz et").click(); await until(() => document.querySelector(".analysis-panel")?.textContent.includes(params.has("analysis-error") ? "Örnek AI bağlantı hatası" : "Analiz tamamlandı"));

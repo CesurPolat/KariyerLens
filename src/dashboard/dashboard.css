@@ -8,3 +8,26 @@
 .event-copy{flex:1;min-width:0}.manual-event-edit{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.manual-event-edit>input:first-child{flex:1;min-width:140px}.manual-event-edit .checkbox-label{margin:0;font-size:11px}.manual-event-edit input{font-size:12px}.event-list li:has(.manual-event-edit){gap:10px;align-items:start}
 
 .application-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Compact lists keep actions and details close to the selected row. */
+.application-table td{padding:10px 12px;vertical-align:middle}
+.application-table th{padding:10px 12px;white-space:nowrap}
+.application-table .job-title{font-size:12px}
+.application-table .company-name{margin-top:2px}
+.application-table td:nth-child(n+2){white-space:nowrap}
+.application-table td .field-error{max-width:300px;white-space:normal}
+.application-table tbody tr:hover{background:#faf8fd}
+.viewed-label{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#41a88c}
+.table-pagination{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-top:16px;color:#8690a3;font-size:11px}
+.table-pagination>label{flex-direction:row;align-items:center;margin-left:auto}
+.table-pagination select{width:auto;padding:6px 9px;font-size:11px}
+.table-pagination>div{display:flex;align-items:center;gap:10px}
+.table-row-actions{display:flex;gap:12px;align-items:center}
+.discovery-table{min-width:900px}
+.discovery-table .new-badge{display:inline-block;width:fit-content;margin-top:5px}
+.application-dialog{position:fixed;inset:0 0 0 auto;margin:0;width:min(620px,100%);height:100dvh;max-height:100dvh;max-width:100%;border:0;padding:0;background:#fff;color:#243047;box-shadow:-12px 0 45px #17243b20}
+.application-dialog::backdrop{background:#17243b45}
+.application-dialog .detail-panel{border:0;border-radius:0;margin:0;box-shadow:none;padding:26px}
+.application-dialog .section-heading{position:sticky;top:-26px;background:#fff;z-index:1;padding:18px 0;border-bottom:1px solid #edf0f6}
+.application-dialog .form-actions{position:sticky;bottom:-26px;background:#fff;padding:16px 0;border-top:1px solid #edf0f6}
+@media(max-width:480px){.table-pagination{gap:12px}.table-pagination>label{margin-left:0}.table-pagination>div{width:100%;justify-content:space-between}.application-dialog .detail-panel{padding:20px}.table-row-actions{gap:8px}}

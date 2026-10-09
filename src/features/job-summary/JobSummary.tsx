@@ -1,5 +1,3 @@
-import { useEffect, useRef, useState } from "react";
-import { MESSAGE_TYPES } from "../../shared/messages.js";
 // Import individual modules because the classic content script preserves unused declarations.
 import Activity from "lucide-react/dist/esm/icons/activity.mjs";
 import Clock from "lucide-react/dist/esm/icons/clock.mjs";
@@ -45,18 +43,6 @@ function HiringGauge({ activity }: { activity: HiringActivity }) {
 }
 
 export function JobSummary({ job }: { job: Job }) {
-  const [tracking, setTracking] = useState(false), [trackNotice, setTrackNotice] = useState("");
-  const activeJob = useRef(job.id); activeJob.current = job.id;
-  useEffect(() => { setTracking(false); setTrackNotice(""); }, [job.id]);
-  async function track() {
-    const startedJob = job.id;
-    setTracking(true); setTrackNotice("");
-    try { const result = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.TRACK_JOB, jobId: job.id });
-      if (activeJob.current !== startedJob) return;
-      setTrackNotice(result?.ok ? result.notice || "Takip listene eklendi." : result?.message || "Takip kaydı eklenemedi.");
-    } catch { if (activeJob.current === startedJob) setTrackNotice("Uzantı bağlantısı kesildi. Yeniden yükleyip deneyin."); }
-    finally { if (activeJob.current === startedJob) setTracking(false); }
-  }
   const activity = getHiringActivity(job, getApplicationInsight(job));
   const reviewText = job.applicationReviewText?.replace(/\*\*/g, "").trim();
   const externalApplication = /kariyer\s*\.\s*net\s+dışında/i.test(reviewText || "");
@@ -107,7 +93,6 @@ export function JobSummary({ job }: { job: Job }) {
         <TriangleAlert size={18} aria-hidden="true" />
         <span>{reviewText}</span>
       </div>}
-      <div className="dashboard-tracking"><button disabled={tracking} onClick={() => { void track(); }}>{tracking ? "Ekleniyor…" : "Takibe ekle"}</button><button onClick={() => { void chrome.runtime.sendMessage({ type: MESSAGE_TYPES.OPEN_DASHBOARD }); }}>Dashboard’u aç</button>{trackNotice && <span role="status">{trackNotice}</span>}</div>
       <HiringGauge activity={activity} />
     </section>
   </>;
