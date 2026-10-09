@@ -1731,3 +1731,9 @@ Yeni kayıtlar gerçek istekte görülen URL ve alanlarla eklenecek; endpoint ad
 ### Dashboard başvuru içe aktarma
 
 Kullanıcının başlattığı içe aktarma, belgelenmiş Başvurduğum İlanlar filtresi ile POST /search çağırır: memberId doğrulanmış aday kimliği, jobProperties: ["5"], isSearchFromProfilePage: true, dontShowAppliedJobs: false, currentPage: 1..N, size: 12. Sayfalama totalJobCountWithOutSponsored (yoksa totalJobCount) ve currentPage ile doğrulanır. Sponsorlu ek sonuçlar dışlanır. appliedDetail dolu biçimi doğrulanmadığından tarih/CV bilgisi buradan çıkarılmaz; her ilan için get-job-application-detail kullanılır. Mevcut manuel kayıt alanları korunur. Bu akış taklit yanıtlarla test edilmiştir; oturumlu canlı API uyumluluğu ayrıca doğrulanmalıdır.
+
+### Dashboard ilan araması — gözlemlenen URL filtresi
+
+Kullanıcının paylaştığı başarılı istek: POST /search, calculateHiddenJobCount: true, currentPage: 1, size: 50, memberId: doğrulanmış aday kimliği, url: "___kw=yazılım___opj=1___date=7g___cp=1". Yanıtta totalJobCount: 177, totalJobCountWithOutSponsored: 174 ve 53 öğe (50 normal + 3 sponsorlu) gözlendi. Dashboard aynı URL filtre yapısını sayfa ve hedef pozisyona göre üretir; konum/çalışma modeli seçimlerini mevcut yapısal filtre alanlarıyla gönderir. Sayfa başına 50 normal sonuç, sponsorlar elendikten sonra alınır. postingDate, jobDateStatus=Updated olduğunda yayın tarihi kabul edilmez; New olduğunda yayın tarihi olarak kullanılır. Güncelleme tarihi ile ilk yayın tarihi karıştırılmaz. Paylaşılan örnek işlenmiştir; değişikliğin canlı oturumlu API doğrulaması ayrıca yapılmalıdır.
+
+Dashboard’da Daha eski ilanları da göster seçeneği açıkken URL’de ___date=7g segmenti gönderilmez; tarih kısıtı kaldırılır. Kapalıyken mevcut 7g filtresi korunur. Seçim yerel tercihlere kaydedilir ve sonraki sayfalarda son uygulanmış tercihler kullanılır.

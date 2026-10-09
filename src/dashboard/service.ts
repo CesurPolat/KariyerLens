@@ -6,7 +6,7 @@ import { getKariyerCredentials, kariyerSessionReady } from "../shared/kariyer/ka
 import { chatWithJob } from "../features/chat/chat-api.js";
 import type { ChatStreamOptions } from "../features/chat/chat-api.js";
 import { accountScope, transactDashboard } from "./store.js";
-import { dashboardMessageSchema, analysisMessageSchema, discoveryJobSchema, statusLabels } from "./models.js";
+import { dashboardMessageSchema, analysisMessageSchema, discoveryJobSchema, statusLabels, DISCOVERY_PAGE_SIZE } from "./models.js";
 import type { DashboardState, ResumeSummary, TrackedApplication, CvVariantSnapshot, ApplicationImportSummary } from "./models.js";
 import { object, string, kariyerUrl, dateTime, normalizeApplication, mergeApplication, projectSearch, cvContent, projectAppliedJobs, newTrackedApplication } from "./data.js";
 
@@ -209,8 +209,9 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
     const old = await readState(account), prefs = request.preferences;
     for (const [values, choices] of [[prefs.cities, old.discovery.options.cities], [prefs.workModels, old.discovery.options.workModels]] as const)
       if (values.some(id => !choices.some(o => o.id === id))) fail("INVALID_ARGUMENTS", "Filtre seçenekleri güncel değil. Önce filtresiz yenileyin.");
-    const result = await account.call("search_jobs", { memberId: Number(account.candidateId), jobProperties: ["1"], isSearchFromProfilePage: true,
-      dontShowAppliedJobs: true, size: 12, currentPage: request.page, ...(prefs.keyword ? { keyword: prefs.keyword } : {}),
+    const result = await account.call("search_jobs", { memberId: Number(account.candidateId), jobProperties: ["1"],
+      calculateHiddenJobCount: true, dontShowAppliedJobs: false, size: DISCOVERY_PAGE_SIZE, currentPage: request.page,
+      url: "___kw=" + prefs.keyword.replaceAll("___", " ") + "___opj=1" + (prefs.includeOlder ? "" : "___date=7g") + "___cp=" + request.page, ...(prefs.keyword ? { keyword: prefs.keyword } : {}),
       ...(prefs.cities.length ? { location: { cities: prefs.cities } } : {}), ...(prefs.workModels.length ? { workModels: prefs.workModels } : {}) }, "", projectSearch);
     const data = object(result.data), now = Date.now();
     if (result.truncated || !Array.isArray(data.items)) fail("INVALID_RESPONSE", "İlan araması eksik veya beklenen yapıda değil; önceki sonuçlar korundu.");
@@ -222,7 +223,7 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
       s.discovery = { jobs: [...new Map(jobs.map(j => [j.id, j])).values()], seen: boundedSeen, fetchedAt: now,
         currentPage: request.page, total: Math.max(0, Number(data.total) || 0), options: data.options as DashboardState["discovery"]["options"] };
     });
-    notice = "İlanlar güncellendi. Yayın tarihi son 7 gün olanlar yeni ilanlarda gösterilir.";
+    notice = (prefs.includeOlder ? "Tüm tarihlerdeki ilanlar güncellendi." : "Son 7 gün filtresiyle ilanlar güncellendi.") + " Her sayfada en fazla 50 ilan gösterilir; diğer sonuçlar için Sonraki düğmesini kullanın.";
   }
   account.guard(); return { ok: true as const, data: await readState(account), notice, scope: account.scope, ...(importSummary ? { importSummary } : {}) };
 }

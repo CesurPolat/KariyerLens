@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { dashboardSchema, emptyDashboard, dashboardMessageSchema } from "../src/dashboard/models.ts";
-import { dateTime, isNewJob, jobIdFromUrl, normalizeApplication, mergeApplication, experimentMetrics, variantSuggestion, cvContent, newTrackedApplication } from "../src/dashboard/data.ts";
+import { dateTime, isNewJob, jobIdFromUrl, normalizeApplication, mergeApplication, experimentMetrics, variantSuggestion, cvContent, newTrackedApplication, projectSearch } from "../src/dashboard/data.ts";
 import { accountScope, transactDashboard } from "../src/dashboard/store.ts";
 import { handleDashboard, analyzeDashboard } from "../src/dashboard/service.ts";
 import { captureKariyerSession } from "../src/shared/kariyer/kariyer-session.ts";
@@ -55,6 +55,13 @@ globalThis.fetch = async (input, options) => {
       return Response.json({ data: { totalJobCount: 15, totalJobCountWithOutSponsored: importMode === "empty" ? 0 : 14,
         currentPage: importMode === "wrong-page" ? 99 : body.currentPage, jobs: { items } } });
     }
+    assert.equal(body.size, 50); assert.equal(body.calculateHiddenJobCount, true);
+    assert.equal(body.dontShowAppliedJobs, false);
+    assert.equal(body.url, "___kw=" + (body.keyword || "") + "___opj=1" + (apiMode === "search-all-dates" ? "" : "___date=7g") + "___cp=" + body.currentPage);
+    if (apiMode === "search-paged" || apiMode === "search-all-dates") return Response.json({ data: { totalJobCount: 177, totalJobCountWithOutSponsored: 174, currentPage: body.currentPage, jobs: { items: [
+      ...[1, 2, 3].map(id => ({ ...importJob(id), isSponsored: true })),
+      ...Array.from({ length: 50 }, (_, i) => ({ ...importJob(body.currentPage * 1000 + i), postingDate: "2026-10-09", jobDateStatus: "New" }))
+    ] } } });
     searchCalls++; if (apiMode === "search-invalid") return Response.json({ data: { jobs: {} } });
     const today = new Date().toISOString();
     return Response.json({ statusCode: "Success", data: { totalJobCount: 3, currentPage: 1, jobs: { items: [
@@ -271,4 +278,41 @@ test("missing captured session is distinguished from rejected login and personal
       return true;
     });
   } finally { Date.now = clock; capture("Bearer restored-after-expiry"); }
+});
+
+test("discovery keeps all 50 normal results after sponsored extras and reads only confirmed publication dates", () => {
+  const jobs = [...[1, 2, 3].map(id => ({ ...importJob(id), isSponsored: true })),
+    ...Array.from({ length: 50 }, (_, i) => ({ ...importJob(1000 + i), postingDate: "2026-10-09", jobDateStatus: i ? "New" : "Updated" }))];
+  const projected = projectSearch({ totalJobCount: 177, totalJobCountWithOutSponsored: 174, currentPage: 1, jobs: { items: jobs } });
+  assert.equal(projected.items.length, 50); assert.equal(projected.total, 174);
+  assert.equal(projected.items[0].id, "1000"); assert.equal(projected.items[49].id, "1049");
+  assert.equal(projected.items[0].publishedAt, ""); // An update date cannot be called a publication date.
+  assert.equal(projected.items[1].publishedAt, "2026-10-09");
+});
+test("discovery sends the observed URL filter and returns later pages without cutting the 50 result page", async () => {
+  try {
+    apiMode = "search-paged";
+    const preferences = { ...emptyDashboard().preferences, keyword: "yazılım" };
+    const first = await invoke({ action: "search", preferences, page: 1 });
+    assert.equal(first.data.discovery.jobs.length, 50); assert.equal(first.data.discovery.total, 174);
+    const second = await invoke({ action: "search", preferences, page: 2 });
+    assert.equal(second.data.discovery.currentPage, 2); assert.equal(second.data.discovery.jobs.length, 50);
+    assert.equal(second.data.discovery.jobs[0].id, "2000");
+    assert.ok(second.data.discovery.jobs.every(j => !first.data.discovery.jobs.some(old => old.id === j.id)));
+  } finally { apiMode = "ok"; }
+});
+
+test("including older jobs removes the API date restriction and stays selected on subsequent pages", async () => {
+  try {
+    apiMode = "search-all-dates";
+    const preferences = { ...emptyDashboard().preferences, keyword: "yazılım", includeOlder: true };
+    const first = await invoke({ action: "search", preferences, page: 1 });
+    assert.equal(first.data.preferences.includeOlder, true); assert.match(first.notice, /Tüm tarihler/);
+    const second = await invoke({ action: "search", preferences: first.data.preferences, page: 2 });
+    assert.equal(second.data.preferences.includeOlder, true); assert.equal(second.data.discovery.currentPage, 2);
+  } finally { apiMode = "ok"; }
+});
+test("previously saved discovery preferences default to the existing seven-day search", () => {
+  const legacy = emptyDashboard(); delete legacy.preferences.includeOlder;
+  assert.equal(dashboardSchema.parse(legacy).preferences.includeOlder, false);
 });

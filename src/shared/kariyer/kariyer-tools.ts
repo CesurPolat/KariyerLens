@@ -11,6 +11,7 @@ const empty = z.object({}).strict();
 const page = (key: string, count: number) => z.object({ [key]: offset.default(0), size: size.default(count) }).strict();
 const codes = z.array(z.string().min(1).max(30)).max(50).optional();
 const searchSchema = z.object({
+  url: z.string().max(2000).regex(/^___kw=[^\r\n]*___opj=1(?:___date=7g)?___cp=\d+$/).optional(),
   keyword: keyword.optional(), currentPage: z.number().int().min(1).max(1000).default(1), size: size.default(12),
   memberId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
   workModels: codes, jobProperties: codes, sectors: codes, positionLevels: codes, departments: codes,

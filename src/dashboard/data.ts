@@ -1,3 +1,4 @@
+import { DISCOVERY_PAGE_SIZE } from "./models.js";
 import type { CvVariantSnapshot, DiscoveryJob, TrackedApplication } from "./models.js";
 
 export const object = (v: unknown): Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
@@ -77,10 +78,10 @@ export function projectSearch(value: unknown): unknown {
     return Array.isArray(items) ? items.slice(0, 200).map(v => { const o = object(v); return { id: string(o.id ?? o.code ?? o.value, 30), name: string(o.name ?? o.text ?? o.title, 200) }; }).filter(o => o.id && o.name) : [];
   };
   const location = object(filters.location);
-  return { total: Number(data.totalJobCount) || 0, currentPage: Number(data.currentPage ?? jobs.currentPage) || 1,
-    items: Array.isArray(jobs.items) ? jobs.items.slice(0, 12).map(v => { const j = object(v);
+  return { total: Number(data.totalJobCountWithOutSponsored ?? data.totalJobCount) || 0, currentPage: Number(data.currentPage ?? jobs.currentPage) || 1,
+    items: Array.isArray(jobs.items) ? jobs.items.filter(v => { const j = object(v); return j.isSponsored !== true && j.isRealSponsored !== true; }).slice(0, DISCOVERY_PAGE_SIZE).map(v => { const j = object(v);
       return { id: string(j.id, 16), title: string(j.title, 500), companyName: string(j.companyName, 500), jobUrl: kariyerUrl(j.jobUrl),
-        location: string(j.locationText, 300), workModel: string(j.workModelText ?? j.workModel, 100), publishedAt: string(j.publishDate ?? j.publishedAt, 100) };
+        location: string(j.locationText, 300), workModel: string(j.workModelText ?? j.workModel, 100), publishedAt: string(j.publishDate ?? j.publishedAt ?? (j.jobDateStatus === "New" ? j.postingDate : ""), 100) };
     }) : null,
     options: { cities: options(filters.cities ?? location.cities ?? filters.locations), workModels: options(filters.workModels) } };
 }

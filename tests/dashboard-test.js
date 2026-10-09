@@ -127,6 +127,11 @@ async function run() {
   dateFilter.value = "unknown"; dateFilter.dispatchEvent(new Event("change", { bubbles: true })); await pause();
   check(document.querySelectorAll(".discovery-table tbody tr").length === 1 && document.querySelector(".discovery-table").textContent.includes("Full Stack"), "Tabloda yayın tarihi grubu filtrelenir");
   dateFilter.value = "all"; dateFilter.dispatchEvent(new Event("change", { bubbles: true })); await pause();
+  const searchCount = calls.filter(c => c.payload?.action === "search").length;
+  document.querySelector(".discovery-filters").closest("form").querySelector('input[type="checkbox"]').click(); await pause();
+  check(calls.filter(c => c.payload?.action === "search").length === searchCount, "Tarih seçimi kendiliğinden arama başlatmaz");
+  button("Yenile").click(); await pause();
+  check(state.preferences.includeOlder === true && document.querySelector(".discovery-results").textContent.includes("Tüm tarihler"), "Eski ilanları dahil et seçimi yenilemede uygulanır");
   button("CV’leri getir").click(); await pause(); const select = document.querySelector(".cv-choice select"); select.value = "cv-A"; select.dispatchEvent(new Event("change", { bubbles: true })); await pause();
   button("Uyumu analiz et").click(); await pause(); button("Durdur").click(); await pause(); check(document.querySelector(".analysis-panel").textContent.includes("Analiz durduruldu.") && !button("Durdur"), "AI analizi durdurulabilir");
   button("Uyumu analiz et").click(); await until(() => document.querySelector(".analysis-panel")?.textContent.includes(params.has("analysis-error") ? "Örnek AI bağlantı hatası" : "Analiz tamamlandı"));

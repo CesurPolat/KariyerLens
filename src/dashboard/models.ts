@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const DISCOVERY_PAGE_SIZE = 50;
+
 export const applicationStatuses = ["saved", "applied", "interview", "offer", "rejected", "withdrawn"] as const;
 export const statusLabels: Record<ApplicationStatus, string> = { saved: "Kaydedildi", applied: "Başvuruldu", interview: "Görüşme", offer: "Teklif", rejected: "Olumsuz", withdrawn: "Geri çekildi" };
 export type ApplicationStatus = typeof applicationStatuses[number];
@@ -23,7 +25,7 @@ export const experimentSchema = z.object({ id: z.string().max(100), name: z.stri
   variants: z.tuple([variantSchema, variantSchema]) }).strict();
 export type CvExperiment = z.infer<typeof experimentSchema>;
 export const preferencesSchema = z.object({ keyword: z.string().trim().max(200), cities: z.array(z.string().max(30)).max(10),
-  workModels: z.array(z.string().max(30)).max(3), resumeId: z.string().max(512) }).strict();
+  workModels: z.array(z.string().max(30)).max(3), includeOlder: z.boolean().default(false), resumeId: z.string().max(512) }).strict();
 export type JobDiscoveryPreferences = z.infer<typeof preferencesSchema>;
 const optionSchema = z.object({ id: z.string().max(30), name: z.string().max(200) }).strict();
 export const discoveryJobSchema = z.object({ id: jobId, title: text, companyName: text, jobUrl: z.string().max(2000), location: text,
@@ -39,7 +41,7 @@ export type DashboardState = z.infer<typeof dashboardSchema>;
 export interface ApplicationImportSummary { added: number; updated: number; total: number; page: number; nextPage: number | null; jobIds: string[]; detailErrors: number; warning: string }
 export interface ResumeSummary { id: string; name: string; updatedAt: string }
 export const emptyDashboard = (): DashboardState => ({ version: 1, applications: [], experiments: [],
-  preferences: { keyword: "", cities: [], workModels: [], resumeId: "" },
+  preferences: { keyword: "", cities: [], workModels: [], includeOlder: false, resumeId: "" },
   discovery: { jobs: [], seen: {}, fetchedAt: null, currentPage: 1, total: 0, options: { cities: [], workModels: [] } } });
 const dateInput = z.string().regex(/^$|^\d{4}-\d{2}-\d{2}$/);
 export const applicationPatchSchema = z.object({ status: z.enum(applicationStatuses), appliedAt: dateInput, notes: text,
