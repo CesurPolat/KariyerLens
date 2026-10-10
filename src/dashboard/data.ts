@@ -1,5 +1,5 @@
-import { DISCOVERY_PAGE_SIZE } from "./models.js";
-import type { CvVariantSnapshot, DiscoveryJob, TrackedApplication } from "./models.js";
+import { DISCOVERY_PAGE_SIZE, resumeViewSchema } from "./models.js";
+import type { CvVariantSnapshot, DiscoveryJob, TrackedApplication, ResumeView } from "./models.js";
 
 export const object = (v: unknown): Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
 export const string = (v: unknown, max = 4000): string => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, max) : "";
@@ -56,18 +56,43 @@ export function variantSuggestion(app: TrackedApplication, variants: CvVariantSn
   // A mutable remote CV id does not prove which frozen version was submitted.
   return matches.length === 1 ? matches[0].id : null;
 }
-export function experimentMetrics(apps: TrackedApplication[], variantId: string, from = "", to = "") {
+export function projectResumeViews(value: unknown) {
+  if (!Array.isArray(value)) throw new Error("CV görüntülenmeleri beklenen yapıda değil.");
+  const records: ResumeView[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const group = object(item);
+    if (typeof group.resumeId !== "string" || !group.resumeId || !Array.isArray(group.resumeViewList))
+      throw new Error("CV görüntülenme grubu geçersiz.");
+    for (const entry of group.resumeViewList) {
+      const r = object(entry);
+      const row = resumeViewSchema.parse({ resumeId: group.resumeId, resumeName: string(r.resumeName),
+        jobId: string(r.jobId), jobName: string(r.jobName), companyName: string(r.companyName),
+        viewedAt: string(r.viewDateTime, 100), viewCount: r.viewCount });
+      if (dateTime(row.viewedAt) === null) throw new Error("CV görüntülenme tarihi geçersiz.");
+      const key = JSON.stringify(row);
+      if (!seen.has(key)) { seen.add(key); if (records.length < 100) records.push(row); }
+    }
+  }
+  return { records, partial: true };
+}
+export function experimentMetrics(apps: TrackedApplication[], variantId: string, from = "", to = "", resumeId?: string, views: ResumeView[] = []) {
   const start = dateTime(from), end = dateTime(to);
   const samples = apps.filter(a => {
     const at = dateTime(a.appliedAt || a.api.appliedAt);
-    return a.variantId === variantId && at !== null && (a.status !== "saved" || a.api.applied === true)
+    const matches = resumeId && a.api.cvId ? a.api.cvId === resumeId : a.variantId === variantId;
+    return matches && at !== null && (a.status !== "saved" || a.api.applied === true)
       && (start === null || at >= start) && (end === null || at < end + 86400000);
   });
   const n = samples.length;
   const count = (predicate: (a: TrackedApplication) => boolean) => {
     const value = samples.filter(predicate).length; return { count: value, rate: n ? value / n : null };
   };
-  return { applications: n, viewed: count(a => [...a.api.events, ...a.manualEvents].some(e => e.viewed)),
+  const cvViews = views.filter(v => v.resumeId === resumeId && (start === null || (dateTime(v.viewedAt) ?? -Infinity) >= start)
+    && (end === null || (dateTime(v.viewedAt) ?? Infinity) < end + 86400000));
+  return { applications: n, viewed: count(a => [...a.api.events, ...a.manualEvents].some(e => e.viewed)
+      || cvViews.some(v => v.jobId === a.jobId && v.resumeId === a.api.cvId && v.viewCount > 0)),
+    totalViews: cvViews.reduce((sum, v) => sum + v.viewCount, 0),
     responded: count(a => a.responded), interviewed: count(a => a.interviewed), offered: count(a => a.offered) };
 }
 /** Extract before the generic tool budget: filters and unused fields must not truncate job cards. */

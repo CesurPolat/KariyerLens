@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { dashboardSchema, emptyDashboard, dashboardMessageSchema } from "../src/dashboard/models.ts";
-import { dateTime, isNewJob, jobIdFromUrl, normalizeApplication, mergeApplication, experimentMetrics, variantSuggestion, cvContent, newTrackedApplication, projectSearch } from "../src/dashboard/data.ts";
+import { dateTime, isNewJob, jobIdFromUrl, normalizeApplication, mergeApplication, experimentMetrics, variantSuggestion, cvContent, newTrackedApplication, projectSearch, projectResumeViews } from "../src/dashboard/data.ts";
 import { accountScope, transactDashboard } from "../src/dashboard/store.ts";
 import { handleDashboard, analyzeDashboard } from "../src/dashboard/service.ts";
 import { captureKariyerSession } from "../src/shared/kariyer/kariyer-session.ts";
@@ -10,6 +10,7 @@ const db = {};
 let currentId = "101", token = "Bearer account-one", cvVersion = "SQL", apiMode = "ok", applied = true, searchCalls = 0, providerCalls = 0, changeDuringBase = false;
 let providerBody;
 let importMode = "ok", detailMode = "ok";
+let viewsMode = "ok";
 const importJob = id => ({ id, title: "İçe aktarılan " + id, companyName: "İçe aktarma AŞ", jobUrl: "/is-ilani/ilan-" + id });
 const candidate = "https://candidatewebapigw.kariyer.net", search = "https://candidatesearchapigateway.kariyer.net";
 globalThis.chrome = { storage: { local: { async get(key) { return key === "chatSettings" ? { chatSettings: { provider: "openai", providers: { openai: { apiKey: "test-secret", model: "test" } } } } : structuredClone({ [key]: db[key] }); }, async set(value) { Object.assign(db, structuredClone(value)); } } } };
@@ -36,6 +37,16 @@ globalThis.fetch = async (input, options) => {
     { interactionStatus: 99, interactionDate: "2026-10-04T12:00:00", interactionStatusText: "Bilinmeyen durum" },
   ] });
   if (url.pathname === "/jb/api/candidates/resumes") return Response.json({ statusCode: 200, result: { resumeList: [{ encryptedId: "cv+A=", resumeName: "CV A", lastUpdateDate: "2026-10-01" }, { encryptedId: "cv-B", resumeName: "CV B" }], totalCount: 2 } });
+  if (url.pathname === "/jb/api/candidates/resumes/view") {
+    assert.equal(url.searchParams.get("skip"), "0"); assert.equal(url.searchParams.get("size"), "8");
+    assert.equal(url.searchParams.get("ClientType"), "1");
+    if (viewsMode === "switch") capture("Bearer views-switch");
+    if (viewsMode === "400" || viewsMode === "429") return new Response("error", { status: Number(viewsMode) });
+    if (viewsMode === "invalid") return Response.json({ result: [{ resumeId: "cv+A=", resumeViewList: [{}] }] });
+    return Response.json({ result: [{ resumeId: "cv+A=", totalCount: 1, resumeViewList: [
+      { resumeName: "CV A", jobId: 123, jobName: "Frontend", companyName: "Örnek", viewDateTime: "2026-10-02T12:00:00", viewCount: 2 }
+    ] }] });
+  }
   if (url.pathname === "/jb/api/candidates/resume" && apiMode === "cv-empty") return Response.json({ result: {} });
   if (url.pathname === "/jb/api/candidates/resume") return Response.json({ statusCode: 200, result: { title: url.searchParams.get("resumeId"), summary: cvVersion, contactInformation: { email: "private@test" }, name: "Private Name" } });
   if (url.pathname === "/search") {
@@ -315,4 +326,67 @@ test("including older jobs removes the API date restriction and stays selected o
 test("previously saved discovery preferences default to the existing seven-day search", () => {
   const legacy = emptyDashboard(); delete legacy.preferences.includeOlder;
   assert.equal(dashboardSchema.parse(legacy).preferences.includeOlder, false);
+});
+
+test("legacy dashboards default CV view state without losing existing data", () => {
+  const legacy = emptyDashboard(); delete legacy.resumeViews;
+  const parsed = dashboardSchema.parse(legacy);
+  assert.deepEqual(parsed.resumeViews, { records: [], fetchedAt: null, partial: true, error: "" });
+  assert.deepEqual(parsed.applications, legacy.applications);
+});
+
+test("CV identity automatically groups existing applications per test and overrides conflicting manual choices", () => {
+  const sample = newTrackedApplication({ jobId: "123", title: "Test", companyName: "", jobUrl: "" }, Date.now());
+  Object.assign(sample, { status: "applied", appliedAt: "2026-10-01", variantId: "manual-B" });
+  Object.assign(sample.api, { applied: true, cvId: "cv-A", cvName: "Same name" });
+  const apps = [sample, { ...sample, jobId: "124", api: { ...sample.api, cvId: "unknown" } },
+    { ...sample, jobId: "125", appliedAt: "" }];
+  assert.equal(experimentMetrics(apps, "test-one-A", "", "", "cv-A").applications, 1);
+  assert.equal(experimentMetrics(apps, "test-two-A", "", "", "cv-A").applications, 1);
+  assert.equal(experimentMetrics(apps, "manual-B", "", "", "cv-B").applications, 0);
+  assert.equal(sample.variantId, "manual-B");
+  assert.equal(experimentMetrics([{ ...sample, api: { ...sample.api, cvId: "" } }], "manual-B", "", "", "cv-B").applications, 1);
+  assert.equal(experimentMetrics(apps, "test-one-A", "2026-10-02", "", "cv-A").applications, 0);
+});
+
+test("CV views separate CV and job identities, deduplicate rate sources, and keep aggregate counts separate", () => {
+  const sample = newTrackedApplication({ jobId: "123", title: "Test", companyName: "", jobUrl: "" }, Date.now());
+  Object.assign(sample, { status: "applied", appliedAt: "2026-10-01" });
+  Object.assign(sample.api, { applied: true, cvId: "cv-A" });
+  const row = { resumeId: "cv-A", resumeName: "Same name", jobId: "123", jobName: "Test", companyName: "Test", viewedAt: "2026-10-02", viewCount: 3 };
+  const views = [row, { ...row, jobId: "999", viewCount: 2 }, { ...row, resumeId: "cv-B", viewCount: 7 }];
+  let metrics = experimentMetrics([sample], "A", "", "", "cv-A", views);
+  assert.equal(metrics.viewed.count, 1); assert.equal(metrics.totalViews, 5);
+  sample.api.events = [{ id: "view", text: "View", at: "2026-10-02", viewed: true, source: "api" }];
+  metrics = experimentMetrics([sample], "A", "", "", "cv-A", views);
+  assert.equal(metrics.viewed.rate, 1); assert.equal(metrics.viewed.count, 1);
+  assert.equal(experimentMetrics([{ ...sample, api: { ...sample.api, events: [] } }], "A", "", "", "cv-A", views.slice(1)).viewed.count, 0);
+  assert.equal(experimentMetrics([sample], "A", "", "2026-10-01", "cv-A", views).totalViews, 0);
+});
+
+test("CV view projection bounds records, preserves counts, and rejects malformed records", () => {
+  const row = { resumeName: "CV", jobId: 123, jobName: "Job", companyName: "Company", viewDateTime: "2026-10-02T12:00:00", viewCount: 2 };
+  const projected = projectResumeViews([{ resumeId: "cv", resumeViewList: [row, row, ...Array.from({ length: 120 }, (_, i) => ({ ...row, jobId: 200 + i }))] }]);
+  assert.equal(projected.records.length, 100); assert.equal(projected.partial, true);
+  assert.equal(projected.records[0].viewCount, 2);
+  for (const raw of [{}, [{ resumeId: "cv" }], [{ resumeId: "cv", resumeViewList: [{ ...row, viewCount: -1 }] }],
+    [{ resumeId: "cv", resumeViewList: [{ ...row, viewDateTime: "invalid" }] }]]) assert.throws(() => projectResumeViews(raw));
+});
+
+test("refresh saves CV views, preserves successful cache on failures, and isolates accounts", async () => {
+  viewsMode = "ok";
+  const good = (await invoke({ action: "refresh" })).data.resumeViews;
+  assert.equal(good.records.length, 1); assert.equal(good.records[0].resumeId, "cv+A="); assert.ok(good.fetchedAt);
+  for (const mode of ["400", "invalid", "429"]) {
+    viewsMode = mode;
+    const next = (await invoke({ action: "refresh" })).data.resumeViews;
+    assert.deepEqual(next.records, good.records); assert.equal(next.fetchedAt, good.fetchedAt); assert.ok(next.error);
+  }
+  viewsMode = "switch";
+  await assert.rejects(invoke({ action: "refresh" }), /oturumu değişti/);
+  viewsMode = "ok";
+  const prior = currentId; currentId = "90909"; capture("Bearer view-account");
+  assert.equal((await invoke({ action: "get" })).data.resumeViews.records.length, 0);
+  currentId = prior; capture("Bearer view-account-restored");
+  assert.deepEqual((await invoke({ action: "get" })).data.resumeViews.records, good.records);
 });

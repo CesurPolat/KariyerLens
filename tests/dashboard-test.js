@@ -4,12 +4,13 @@ const pause = () => new Promise(resolve => setTimeout(resolve, 30));
 const params = new URL(location.href).searchParams;
 const results = document.getElementById("results"), calls = [];
 const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Istanbul" });
-const empty = { version: 1, applications: [], experiments: [], preferences: { keyword: "", cities: [], workModels: [], resumeId: "" }, discovery: { jobs: [], seen: {}, fetchedAt: null, currentPage: 1, total: 0, options: { cities: [], workModels: [] } } };
+const empty = { version: 1, applications: [], experiments: [], resumeViews: { records: [], fetchedAt: null, partial: true, error: "" }, preferences: { keyword: "", cities: [], workModels: [], resumeId: "" }, discovery: { jobs: [], seen: {}, fetchedAt: null, currentPage: 1, total: 0, options: { cities: [], workModels: [] } } };
 const variant = (label, name) => ({ id: "variant-" + label, label, name, resumeId: "cv-" + label, content: { summary: "React TypeScript SQL" }, fetchedAt: Date.now(), truncated: false });
 const example = (id, title, companyName, status) => ({ jobId: id, title, companyName, jobUrl: "https://www.kariyer.net/is-ilani/test-" + id, createdAt: Date.now(), status, statusManual: true, appliedAt: today, notes: "", followUpAt: "", variantId: "variant-A", responded: false, interviewed: status === "interview", offered: false, manualEvents: [], api: { applied: status !== "saved", appliedAt: today, cvId: "cv-A", cvName: "Teknik CV", events: [], fetchedAt: Date.now(), error: "" } });
 const state = structuredClone(empty);
 if (!params.has("empty") && !params.has("auth")) {
   state.applications = [example("123", "Frontend Geliştirici", "Nova Teknoloji", "interview"), example("124", "Yazılım Mühendisi", "Atlas Digital", "applied"), example("125", "React Geliştirici", "Pixel Studio", "saved")];
+  state.applications[0].variantId = ""; state.applications[1].variantId = "variant-B";
   state.applications[0].api.events = [{ id: "view", at: today, text: "Özgeçmişin Görüntülendi", viewed: true, source: "api" }];
   state.experiments = [{ id: "test-1", name: "Teknik detay vs. proje odaklı", createdAt: Date.now(), variants: [variant("A", "Teknik CV"), variant("B", "Proje Odaklı CV")] }];
 }
@@ -22,6 +23,7 @@ window.chrome = { runtime: {
     calls.push(message);
     if (params.has("auth")) return { ok: false, code: "AUTH_REQUIRED", message: "Kariyer.net hesabınızda oturum açıp profil sayfasını yenileyin." };
     const request = message.payload;
+    if (request.action === "refresh") state.resumeViews = { records: [{ resumeId: "cv-A", resumeName: "Teknik CV", jobId: "123", jobName: "Frontend Geliştirici", companyName: "Nova Teknoloji", viewedAt: today, viewCount: 3 }], fetchedAt: Date.now(), partial: true, error: "" };
     if (request.action === "importApplications") {
       const jobIds = request.page === 1 ? ["601", "602"] : ["603"];
       let added = 0;
@@ -69,13 +71,13 @@ async function run() {
   if (params.has("interactive")) { results.textContent = "Örnek veriler · Gerçek hesaba, depolamaya veya AI sağlayıcısına erişilmez."; return; }
   if (params.has("auth")) { check(!document.querySelector(".stats"), "Oturum yokken kişisel kayıtlar gösterilmez"); check(document.querySelector('[role="alert"]'), "Oturum hatası görünür"); return; }
   if (params.has("table")) {
-    check(document.querySelectorAll(".application-table tbody tr").length === 10, "Uzun liste ilk sayfada 10 satır gösterir");
+    check(document.querySelectorAll(".application-table:not(.resume-view-table) tbody tr").length === 10, "Uzun liste ilk sayfada 10 satır gösterir");
     button("Sonraki").click(); await pause();
-    check(document.querySelectorAll(".application-table tbody tr").length === 10 && document.querySelector(".table-pagination").textContent.includes("11–20"), "İkinci sayfaya geçilir");
+    check(document.querySelectorAll(".application-table:not(.resume-view-table) tbody tr").length === 10 && document.querySelector(".table-pagination").textContent.includes("11–20"), "İkinci sayfaya geçilir");
     button("Sonraki").click(); await pause();
-    check(document.querySelectorAll(".application-table tbody tr").length === 3 && button("Sonraki").disabled, "Son sayfa kalan kayıtları gösterir");
+    check(document.querySelectorAll(".application-table:not(.resume-view-table) tbody tr").length === 3 && button("Sonraki").disabled, "Son sayfa kalan kayıtları gösterir");
     input(document.querySelector('[aria-label="Başlık veya şirket ara"]'), "Frontend"); await pause();
-    check(document.querySelectorAll(".application-table tbody tr").length === 1 && document.querySelector(".table-pagination").textContent.includes("1–1"), "Arama sayfalamayı sıfırlar");
+    check(document.querySelectorAll(".application-table:not(.resume-view-table) tbody tr").length === 1 && document.querySelector(".table-pagination").textContent.includes("1–1"), "Arama sayfalamayı sıfırlar");
     button("Detay").click(); await pause();
     check(document.querySelector("dialog:modal") && document.querySelector(".detail-panel"), "Detay sayfayı uzatmadan yan panelde açılır");
     document.querySelector('[aria-label="Detayı kapat"]').click(); await pause();
@@ -87,12 +89,16 @@ async function run() {
     check(!button("Başvurularımı içe aktar").disabled, "Boş listede içe aktarma kullanılabilir");
     button("Başvurularımı içe aktar").click();
     await until(() => state.applications.length === 3 && !button("Başvurularımı içe aktar").disabled);
-    check(document.querySelectorAll(".application-table tbody tr").length === 3, "Mevcut başvurular boş listeye aktarılır");
+    check(document.querySelectorAll(".application-table:not(.resume-view-table) tbody tr").length === 3, "Mevcut başvurular boş listeye aktarılır");
     results.textContent += "\nTüm dashboard tarayıcı testleri geçti."; return;
   }
-  check(document.querySelectorAll(".application-table tbody tr").length === 3, "Başvuru listesi çizilir");
+  check(document.querySelectorAll(".application-table:not(.resume-view-table) tbody tr").length === 3, "Başvuru listesi çizilir");
+  check(document.querySelector(".application-table").textContent.includes("Teknik CV"), "Başvuruda kullanılan API CV adı gösterilir");
+  button("Başvuruları yenile").click(); await pause();
+  check(document.querySelector(".resume-view-table").textContent.includes("Nova Teknoloji"), "CV ve şirket bazında görüntülenmeler gösterilir");
+  check(document.querySelector(".resume-view-table").textContent.includes("3"), "Görüntülenme sayısı gösterilir");
   input(document.querySelector('[aria-label="Başlık veya şirket ara"]'), "Atlas"); await pause();
-  check(document.querySelectorAll(".application-table tbody tr").length === 1, "Şirket araması filtreler");
+  check(document.querySelectorAll(".application-table:not(.resume-view-table) tbody tr").length === 1, "Şirket araması filtreler");
   input(document.querySelector('[aria-label="Başlık veya şirket ara"]'), ""); await pause(); button("Detay").click(); await pause();
   input(document.querySelector(".detail-panel textarea"), "Görüşme notu"); document.querySelector(".detail-panel form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await pause();
   check(state.applications[0].notes === "Görüşme notu", "Başvuru notları kaydedilir");
@@ -103,13 +109,15 @@ async function run() {
   document.querySelector('[aria-label="Detayı kapat"]').click(); await pause();
   button("Başvurularımı içe aktar").click();
   await until(() => calls.filter(c => c.payload?.action === "importApplications").length === 2 && !button("Başvurularımı içe aktar").disabled);
-  check(document.querySelectorAll(".application-table tbody tr").length === 6, "İçe aktarma tüm sayfaları getirir");
+  check(document.querySelectorAll(".application-table:not(.resume-view-table) tbody tr").length === 6, "İçe aktarma tüm sayfaları getirir");
   check(calls.filter(c => c.payload?.action === "importApplications")[1].payload.seenJobIds.length === 2, "Sayfalar arasında görülen ilanlar aktarılır");
   button("Başvurularımı içe aktar").click();
   await until(() => calls.filter(c => c.payload?.action === "importApplications").length === 4 && !button("Başvurularımı içe aktar").disabled);
-  check(document.querySelectorAll(".application-table tbody tr").length === 6 && state.applications[0].notes === "Görüşme notu", "Tekrar içe aktarma kayıtları çoğaltmaz ve notları korur");
+  check(document.querySelectorAll(".application-table:not(.resume-view-table) tbody tr").length === 6 && state.applications[0].notes === "Görüşme notu", "Tekrar içe aktarma kayıtları çoğaltmaz ve notları korur");
   button("CV A/B Testi").click(); await pause(); button("CV’leri getir").click(); await pause();
   check(document.querySelectorAll(".variant-card").length === 2, "A ve B ölçümleri ayrı gösterilir");
+  check(document.querySelectorAll(".sample-count")[0].textContent.startsWith("5"), "Manuel atama olmadan ve çelişse de API CV kimliğiyle A grubuna eşleşir");
+  check(document.querySelectorAll(".sample-count")[1].textContent.startsWith("0"), "Çelişen manuel B ataması API hesabını değiştirmez");
   if (params.has("one-cv")) check(document.querySelector(".test-create button").disabled, "Tek CV ile A/B oluşturma kapalıdır");
   else {
     input(document.querySelector(".test-create input"), "Arayüz CV testi");

@@ -24,6 +24,13 @@ export type CvVariantSnapshot = z.infer<typeof variantSchema>;
 export const experimentSchema = z.object({ id: z.string().max(100), name: z.string().trim().min(1).max(100), createdAt: timestamp,
   variants: z.tuple([variantSchema, variantSchema]) }).strict();
 export type CvExperiment = z.infer<typeof experimentSchema>;
+export const resumeViewSchema = z.object({
+  resumeId: z.string().min(1).max(512), resumeName: text, jobId: z.string().regex(/^$|^\d{1,16}$/),
+  jobName: text, companyName: text, viewedAt: z.string().max(100), viewCount: z.number().int().nonnegative(),
+}).strict();
+export type ResumeView = z.infer<typeof resumeViewSchema>;
+const resumeViewsSchema = z.object({ records: z.array(resumeViewSchema).max(100), fetchedAt: timestamp.nullable(),
+  partial: z.boolean(), error: text }).strict();
 export const preferencesSchema = z.object({ keyword: z.string().trim().max(200), cities: z.array(z.string().max(30)).max(10),
   workModels: z.array(z.string().max(30)).max(3), includeOlder: z.boolean().default(false), resumeId: z.string().max(512) }).strict();
 export type JobDiscoveryPreferences = z.infer<typeof preferencesSchema>;
@@ -32,6 +39,7 @@ export const discoveryJobSchema = z.object({ id: jobId, title: text, companyName
   workModel: text, publishedAt: z.string().max(100), firstSeenAt: timestamp }).strict();
 export type DiscoveryJob = z.infer<typeof discoveryJobSchema>;
 export const dashboardSchema = z.object({ version: z.literal(1), applications: z.array(applicationSchema).max(500),
+  resumeViews: resumeViewsSchema.default({ records: [], fetchedAt: null, partial: true, error: "" }),
   experiments: z.array(experimentSchema).max(20), preferences: preferencesSchema,
   discovery: z.object({ jobs: z.array(discoveryJobSchema).max(50), seen: z.record(z.string(), timestamp),
     fetchedAt: timestamp.nullable(), currentPage: z.number().int().positive(), total: z.number().nonnegative(),
@@ -41,6 +49,7 @@ export type DashboardState = z.infer<typeof dashboardSchema>;
 export interface ApplicationImportSummary { added: number; updated: number; total: number; page: number; nextPage: number | null; jobIds: string[]; detailErrors: number; warning: string }
 export interface ResumeSummary { id: string; name: string; updatedAt: string }
 export const emptyDashboard = (): DashboardState => ({ version: 1, applications: [], experiments: [],
+  resumeViews: { records: [], fetchedAt: null, partial: true, error: "" },
   preferences: { keyword: "", cities: [], workModels: [], includeOlder: false, resumeId: "" },
   discovery: { jobs: [], seen: {}, fetchedAt: null, currentPage: 1, total: 0, options: { cities: [], workModels: [] } } });
 const dateInput = z.string().regex(/^$|^\d{4}-\d{2}-\d{2}$/);

@@ -6,9 +6,9 @@ import { getKariyerCredentials, kariyerSessionReady } from "../shared/kariyer/ka
 import { chatWithJob } from "../features/chat/chat-api.js";
 import type { ChatStreamOptions } from "../features/chat/chat-api.js";
 import { accountScope, transactDashboard } from "./store.js";
-import { dashboardMessageSchema, analysisMessageSchema, discoveryJobSchema, statusLabels, DISCOVERY_PAGE_SIZE } from "./models.js";
+import { dashboardMessageSchema, analysisMessageSchema, discoveryJobSchema, resumeViewSchema, statusLabels, DISCOVERY_PAGE_SIZE } from "./models.js";
 import type { DashboardState, ResumeSummary, TrackedApplication, CvVariantSnapshot, ApplicationImportSummary } from "./models.js";
-import { object, string, kariyerUrl, dateTime, normalizeApplication, mergeApplication, projectSearch, cvContent, projectAppliedJobs, newTrackedApplication } from "./data.js";
+import { object, string, kariyerUrl, dateTime, normalizeApplication, mergeApplication, projectSearch, projectResumeViews, cvContent, projectAppliedJobs, newTrackedApplication } from "./data.js";
 
 const CANDIDATE = "https://candidatewebapigw.kariyer.net", SEARCH = "https://candidatesearchapigateway.kariyer.net";
 export class DashboardError extends Error {
@@ -184,6 +184,18 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
   }
   if (request.action === "refresh") {
     const state = await readState(account); let errors = 0;
+    try {
+      const result = await account.call("get_resume_views", { skip: 0, size: 8 }, "", projectResumeViews);
+      if (result.truncated) fail("INVALID_RESPONSE", "CV görüntülenme yanıtı kısaltıldı; önceki veriler korundu.");
+      const records = z.array(resumeViewSchema).max(100).parse(object(result.data).records);
+      await account.transaction(s => { s.resumeViews = { records, partial: true, fetchedAt: Date.now(), error: "" }; });
+    } catch (error) {
+      account.guard(); errors++;
+      const failure = dashboardFailure(error);
+      await account.transaction(s => { s.resumeViews.error = failure.message; });
+      if (["AUTH_REQUIRED", "RATE_LIMITED"].includes(failure.code))
+        return { ok: true as const, data: await readState(account), notice: failure.message, scope: account.scope };
+    }
     for (const app of state.applications) {
       try {
         const status = await account.call("get_current_job_apply_status", {}, app.jobId, v => ({ isCandidateAppliedJob: object(v).isCandidateAppliedJob }));
