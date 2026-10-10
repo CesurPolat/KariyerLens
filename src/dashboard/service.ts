@@ -46,10 +46,11 @@ export async function resolveAccount(signal?: AbortSignal) {
   return { candidateId, scope, guard, call, transaction };
 }
 type Account = Awaited<ReturnType<typeof resolveAccount>>;
+const RESUME_PAGE_SIZE = 8;
 async function resumes(account: Account): Promise<ResumeSummary[]> {
   const all: ResumeSummary[] = [];
-  for (let skip = 0; skip < 100; skip += 25) {
-    const result = await account.call("get_resumes", { skip, size: 25 }, "", v => {
+  for (let skip = 0; skip < 100; skip += RESUME_PAGE_SIZE) {
+    const result = await account.call("get_resumes", { skip, size: RESUME_PAGE_SIZE }, "", v => {
       const data = object(v); return { totalCount: data.totalCount, resumeList: Array.isArray(data.resumeList) ? data.resumeList.map(x => {
         const r = object(x); return { id: r.resumeId, name: r.resumeName, updatedAt: r.lastUpdateDate };
       }) : null };
@@ -59,7 +60,7 @@ async function resumes(account: Account): Promise<ResumeSummary[]> {
     const page = data.resumeList.map(v => { const r = object(v); return { id: string(r.id, 512), name: string(r.name), updatedAt: string(r.updatedAt, 100) }; });
     if (page.some(r => !r.id)) fail("INVALID_RESPONSE", "CV kimliği eksik.");
     all.push(...page);
-    if (page.length < 25 || all.length >= Number(data.totalCount)) break;
+    if (page.length < RESUME_PAGE_SIZE || all.length >= Number(data.totalCount)) break;
   }
   return [...new Map(all.map(r => [r.id, r])).values()];
 }
