@@ -131,6 +131,32 @@ test("streaming ports reject untrusted senders and invalid input", async () => {
   assert.equal(connection.events.at(-1).result.code, "INVALID_JOB_ID"); assert.equal(requests.length, before);
   connection.port.disconnect();
 });
+test("general chat works from non-job pages without fetching a job", async () => {
+  const before = requests.length;
+  const from = { ...sender, url: "https://www.kariyer.net/ozgecmis/456" };
+  const message = { type: "CHAT_JOB", jobId: "", messages: [{ role: "user", content: "Kariyerimi planlayalım" }] };
+  const result = await new Promise(resolve => assert.equal(listener(message, from, resolve), true));
+  assert.equal(result.ok, true);
+  assert.equal(requests.length, before + 1);
+  const body = JSON.parse(requests.at(-1).options.body);
+  assert.match(JSON.stringify(body.messages[0].content), /Genel sohbet: açık ilan yok/);
+  const names = body.tools.map(item => item.function.name);
+  assert.ok(names.includes("search_jobs") && names.includes("get_resumes"));
+  assert.ok(!names.includes("get_current_job") && !names.includes("get_current_company_stats"));
+  assert.ok(!names.includes("get_current_job_application_detail"));
+  streamSource = () => new Response(new ReadableStream({ start(controller) {
+    controller.enqueue(new TextEncoder().encode('data: {"id":"general","choices":[{"index":0,"delta":{"role":"assistant","content":"Kariyer planı"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'));
+    controller.close();
+  } }), { headers: { "Content-Type": "text/event-stream" } });
+  const connection = streamPort(from);
+  connection.send(message);
+  await until(() => connection.events.some(event => event.type === "done"));
+  assert.equal(connection.events.at(-1).result.ok, true);
+  connection.port.disconnect();
+  streamSource = undefined;
+  assert.equal((await dispatch({ type: "GET_JOB", jobId: "" })).code, "INVALID_JOB_ID");
+});
+
 test("missing setup and invalid input make no network calls", async () => {
   requests.length = 0; chatSettings = undefined;
   assert.equal((await dispatch({ type: "CHAT_JOB", jobId: "456", messages: [{ role: "user", content: "Özet" }] })).code, "MISSING_API_KEY");

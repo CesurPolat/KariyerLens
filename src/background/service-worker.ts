@@ -98,17 +98,19 @@ async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.M
     return { ok: true, data: parsed.success ? parsed.data : null };
   }
   const jobId = validateJobId(message.jobId);
-  if (!jobId) return { ok: false, code: "INVALID_JOB_ID", message: "Geçerli bir ilan bulunamadı." };
-  if (message.type === MESSAGE_TYPES.GET_JOB) return loadJob(jobId);
+  const generalChat = message.type === MESSAGE_TYPES.CHAT_JOB && (message.jobId === "" || message.jobId === undefined);
+  if (!jobId && !generalChat) return { ok: false, code: "INVALID_JOB_ID", message: "Geçerli bir ilan bulunamadı." };
+  const currentJobId = jobId || "";
+  if (message.type === MESSAGE_TYPES.GET_JOB) return loadJob(currentJobId);
   if (message.type === MESSAGE_TYPES.GET_JOB_VISIT) {
-    const result = await getJob(jobId);
+    const result = await getJob(currentJobId);
     if (!result.ok) return result;
-    const existing = cache.get(jobId);
-    if (!existing || existing.fetchedAt <= result.fetchedAt) cache.set(jobId, result);
+    const existing = cache.get(currentJobId);
+    if (!existing || existing.fetchedAt <= result.fetchedAt) cache.set(currentJobId, result);
     try { await storageReady; } catch {
       return { ...result, history: { measurements: [], status: "unavailable" } };
     }
-    const history = await recordJobVisit(jobId, result.data.applicationCount, result.fetchedAt);
+    const history = await recordJobVisit(currentJobId, result.data.applicationCount, result.fetchedAt);
     return { ...result, history };
   }
   if (!validateMessages(message.messages)) return { ok: false, code: "INVALID_MESSAGES", message: "Mesajlar geçersiz veya çok uzun." };
@@ -117,22 +119,23 @@ async function handleMessage(message: ExtensionMessage, sender: chrome.runtime.M
   const startedRevision = memoryRevision();
   let recorded = false;
   return chatWithJob({}, message.messages, chatSettings, fetch, {
+    hasCurrentJob: !generalChat,
     loadJob: async () => {
-      const result = await loadJob(jobId);
+      const result = await loadJob(currentJobId);
       if (result.ok && !streaming?.signal?.aborted) {
         const increment = !recorded;
         recorded = true;
         await rememberJob(JSON.parse(buildContext(result.data)), result.fetchedAt, increment, startedRevision);
       }
       return result;
-    }, loadCompany: () => loadCompany(jobId, sender),
+    }, loadCompany: () => loadCompany(currentJobId, sender),
     memory: { context: memoryJobContext, list: listMemoryJobs, get: getMemoryJob },
     callKariyerTool: async (name, input, signal) => {
       const endpoint = KARIYER_TOOLS.find(item => item.name === name);
       const credentials = endpoint ? getKariyerCredentials(endpoint.origin) : {};
       const parsed = endpoint?.schema.safeParse(input);
       const load = async () => {
-        const result = await callKariyerTool(name, input, jobId, credentials, fetch, signal);
+        const result = await callKariyerTool(name, input, currentJobId, credentials, fetch, signal);
         if (["get_resumes", "get_resume"].includes(name) && endpoint
           && getKariyerCredentials(endpoint.origin).bearer !== credentials.bearer)
           return { ok: false as const, code: "AUTH_REQUIRED", message: "Kariyer.net oturumu değişti. Yeniden deneyin." };

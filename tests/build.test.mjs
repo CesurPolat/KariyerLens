@@ -39,6 +39,10 @@ test("built content scripts retain shared navigation helpers", async () => {
   const source = await readFile(new URL("src/content/content-script.js", dist), "utf8");
   vm.runInContext(source, scope);
   assert.equal(vm.runInContext("findJobId()", scope), "123");
+  for (const path of ["/ozgecmis/456", "/firma-profil/ornek-456", "/is-ilanlari?jobId=456", "/"]) {
+    scope.location.href = "https://www.kariyer.net" + path;
+    assert.equal(vm.runInContext("findJobId()", scope), "", path);
+  }
   assert.equal(vm.runInContext("typeof loadCurrentJob", scope), "function");
 });
 

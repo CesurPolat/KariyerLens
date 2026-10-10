@@ -1,5 +1,5 @@
 // Isolated test page: no real Chrome APIs, credentials or provider requests.
-let currentJob = "123";
+let currentJob = new URLSearchParams(location.search).has("general") ? "" : "123";
 let lastRequestedJobId = "";
 function findJobId() { return currentJob; }
 function loadCurrentJob() {}
@@ -31,6 +31,17 @@ const lines = [];
 function check(condition, label) { if (!condition) throw new Error(label); lines.push("✓ " + label); results.textContent = lines.join("\n"); }
 const host = () => document.querySelector('[data-kariyer-lens-chat="true"]');
 async function run() {
+  if (!currentJob) {
+    await pause();
+    check(!!host() && shadow.querySelector("header p").textContent.includes("Genel sohbet"), "İlan dışındaki ilk yüklemede balon genel sohbetle açılır");
+    shadow.querySelector("#chat-launcher").click(); await pause();
+    shadow.querySelector("textarea").value = "Kariyer planı yapalım";
+    shadow.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true })); await pause();
+    check(requests[0].message.jobId === "", "İlan dışındaki ilk yüklemede mesaj gönderilebilir");
+    requests[0].resolve({ ok: true, reply: "Birlikte planlayabiliriz." }); await pause();
+    currentJob = "123"; fixture.append(document.createElement("span")); await pause();
+    requests.length = 0;
+  }
   await pause(); check(!!host() && host().parentElement === document.body, "Sohbet ilan sayfasında sütun beklemeden eklenir");
   const launcher = shadow.querySelector("#chat-launcher");
   check(shadow.querySelector("section").hidden && launcher.getAttribute("aria-expanded") === "false", "İlk açılışta yalnız baloncuk görünür");
@@ -98,9 +109,19 @@ async function run() {
   const panel = shadow.querySelector("section").getBoundingClientRect();
   check(panel.left >= 0 && panel.right <= innerWidth && panel.top >= 0 && panel.bottom <= innerHeight, "Panel ekran sınırları içinde kalır");
   check(shadow.querySelector("section").scrollWidth <= panel.width, "Panelde yatay taşma yok");
-  currentJob = ""; fixture.append(document.createElement("span")); await pause(); check(!host(), "İlan dışına çıkınca kart kaldırılır");
+  currentJob = ""; fixture.append(document.createElement("span")); await pause(); check(!!host(), "İlan dışında sohbet balonu görünür");
+  check(shadow.querySelector("header p").textContent.includes("Genel sohbet"), "İlan dışındaki bağlam açıkça belirtilir");
+  check(!shadow.querySelector("#messages").textContent, "İlan sohbeti genel sohbete taşınmaz");
+  launcher.click(); await pause();
+  input.value = "CV’mi geliştirmek istiyorum";
+  const generalRequestIndex = requests.length;
+  shadow.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true })); await pause();
+  check(requests[generalRequestIndex].message.jobId === "", "Genel sohbet ilan kimliği olmadan gönderilir");
+  requests[generalRequestIndex].resolve({ ok: true, reply: "CV’ni birlikte inceleyebiliriz." }); await pause();
+  check(shadow.querySelector("#messages").textContent.includes("birlikte"), "Genel sohbet yanıtı gösterilir");
   currentJob = "789"; fixture.append(document.createElement("span")); await pause();
   check(!!host(), "İlana dönünce kart yeniden eklenir");
+  check(!shadow.querySelector("#messages").textContent && shadow.querySelector("header p").textContent.includes("789"), "İlana dönünce genel sohbet temizlenir ve yeni ilan bağlamı gösterilir");
   check(host().shadowRoot === null, "Shadow DOM kapalıdır");
   results.textContent += "\nTüm tarayıcı testleri geçti.";
 }

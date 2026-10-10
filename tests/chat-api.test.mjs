@@ -6,6 +6,32 @@ const history = [{ role: "user", content: "İlanı özetle" }];
 const settings = (provider = "openai") => ({ provider, providers: { [provider]: { apiKey: "test-key", model: "test-model" } } });
 const job = { id: "123", title: "ERP Uzmanı", companyName: "Örnek", qualifications: "<p>SQL &amp; ERP</p><script>evil()</script>", education: ["Üniversite"], applicationCount: "200", secret: "not included" };
 
+test("general chat uses candidate tools without loading or exposing an active job", async () => {
+  let modelCalls = 0, candidateCalls = 0;
+  const result = await chatWithJob({}, [{ role: "user", content: "CV’lerimi incele" }], settings(), async (_, options) => {
+    const body = JSON.parse(options.body);
+    assert.match(JSON.stringify(body.messages[0].content), /Genel sohbet: açık ilan yok/);
+    const names = body.tools.map(item => item.function.name);
+    for (const endpoint of KARIYER_TOOLS.filter(item => item.currentJob)) assert.ok(!names.includes(endpoint.name));
+    assert.ok(!names.includes("get_current_job"));
+    assert.ok(!names.includes("get_current_company_stats"));
+    assert.ok(names.includes("search_jobs"));
+    if (++modelCalls === 1) return toolReply("get_resumes", "general-cv");
+    assert.equal(JSON.parse(body.messages.at(-1).content).data.resumeList[0].resumeId, "cv-one");
+    return textReply("CV bulundu.");
+  }, {
+    hasCurrentJob: false,
+    loadJob: async () => assert.fail("general chat must not load a job"),
+    loadCompany: async () => assert.fail("general chat must not load company stats"),
+    callKariyerTool: async name => {
+      assert.equal(name, "get_resumes"); candidateCalls++;
+      return { ok: true, data: { resumeList: [{ resumeId: "cv-one" }] }, truncated: false, methodAssumed: false };
+    },
+  });
+  assert.deepEqual(result, { ok: true, reply: "CV bulundu." });
+  assert.equal(candidateCalls, 1);
+});
+
 for (const provider of ["openai", "openrouter", "cesurpolat"]) {
   test(`${provider}: endpoint, auth, context and reply`, async () => {
     let calls = 0;

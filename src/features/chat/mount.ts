@@ -16,7 +16,7 @@ export function mountChat(findJobId: () => string, loadCurrentJob: () => Promise
       root.render(createElement(ChatCard, { jobId }));
       void loadCurrentJob();
     }
-    if (!jobId || !document.body) { host.remove(); return; }
+    if (!document.body) { host.remove(); return; }
     if (host.parentElement !== document.body) document.body.append(host);
   }
   let scheduled = false;

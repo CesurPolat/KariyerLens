@@ -40,7 +40,7 @@ export function useJobChat(jobId: string) {
 
   async function submit(value: string) {
     const text = value.trim();
-    if (!text || busy.current || !jobId || findJobId() !== jobId) return;
+    if (!text || busy.current || findJobId() !== jobId) return;
     if (text.length > 4000) {
       setStatus({ text: "En fazla 4.000 karakter yazabilirsiniz.", error: true });
       return;

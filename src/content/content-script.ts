@@ -15,6 +15,7 @@ let positionTimeout: ReturnType<typeof setTimeout> | undefined;
 
 function findJobId() {
   const url = new URL(location.href);
+  if (!/^\/(?:is-ilani|job|ilan)(?:\/|-)/i.test(url.pathname)) return "";
   const candidates = [
     url.searchParams.get("jobId"),
     url.searchParams.get("jobid"),
