@@ -1,4 +1,5 @@
 import { handleDashboard, analyzeDashboard, dashboardFailure } from "../dashboard/service.js";
+import { attachDashboardAutoConnect } from "./dashboard-auto-connect.js";
 import { jobIdFromUrl } from "../dashboard/data.js";
 import { clearMemory, getMemoryJob, getMemoryStatus, hashMemorySession, listMemoryJobs, memoryJobContext, memoryRevision, rememberJob, setMemoryEnabled, withResumeMemory } from "../features/memory/chat-memory.js";
 import { pruneJobVisitHistory, recordJobVisit } from "../features/application-history/job-visit-history.js";
@@ -189,6 +190,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onConnect.addListener((port) => {
   const sender = port.sender;
+  if (port.name === MESSAGE_TYPES.DASHBOARD_AUTO_CONNECT) {
+    if (!sender || !isDashboardSender(sender)) { port.disconnect(); return; }
+    attachDashboardAutoConnect(port, async signal => {
+      try { await storageReady; return await handleDashboard({ action: "get" }, undefined, false, signal); }
+      catch (error) { return dashboardFailure(error); }
+    });
+    return;
+  }
   if (port.name === MESSAGE_TYPES.DASHBOARD_ANALYSIS) {
     if (!sender || !isDashboardSender(sender)) { port.disconnect(); return; }
     const controller = new AbortController(); let started = false, closed = false;

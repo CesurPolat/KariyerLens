@@ -4,6 +4,13 @@ const origins = ["https://candidatewebapigw.kariyer.net", "https://candidatesear
 const SESSION_KEY = "kariyerLensApiSession";
 const SESSION_TTL = 30 * 60 * 1000;
 const sessions = new Map<string, { credentials: KariyerCredentials; capturedAt: number }>();
+const bearerListeners = new Set<(event: { tabId: number; origin: string }) => void>();
+
+/** Notify worker consumers without exposing credentials. */
+export function onKariyerBearerCaptured(listener: (event: { tabId: number; origin: string }) => void): () => void {
+  bearerListeners.add(listener);
+  return () => { bearerListeners.delete(listener); };
+}
 
 let ready: Promise<void> | undefined;
 let writes: Promise<void> = Promise.resolve();
@@ -47,11 +54,13 @@ export function captureKariyerSession(details: chrome.webRequest.OnBeforeSendHea
   if (!origins.includes(origin)) return;
   const credentials: KariyerCredentials = { ...getKariyerCredentials(origin) };
   let captured = false;
+  let bearerCaptured = false;
   for (const header of details.requestHeaders ?? []) {
-    if (header.name.toLowerCase() === "authorization" && /^Bearer \S+$/i.test(header.value ?? "")) { credentials.bearer = header.value; captured = true; }
+    if (header.name.toLowerCase() === "authorization" && /^Bearer \S+$/i.test(header.value ?? "")) { credentials.bearer = header.value; captured = true; bearerCaptured = true; }
     if (header.name.toLowerCase() === "apikey" && header.value) { credentials.apiKey = header.value; captured = true; }
   }
   if (captured) { sessions.set(origin, { credentials, capturedAt: Date.now() }); persistSessions(); }
+  if (bearerCaptured) for (const listener of bearerListeners) listener({ tabId: details.tabId, origin });
 }
 
 export function getKariyerCredentials(origin: string): KariyerCredentials {

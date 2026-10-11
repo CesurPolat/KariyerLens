@@ -130,10 +130,10 @@ async function importApplications(account: Account, pageNumber: number, seenJobI
   return summary;
 }
 
-export async function handleDashboard(input: unknown, expectedScope?: unknown, requireScope = false) {
+export async function handleDashboard(input: unknown, expectedScope?: unknown, requireScope = false, signal?: AbortSignal) {
   const parsed = dashboardMessageSchema.safeParse(input);
   if (!parsed.success) fail("INVALID_ARGUMENTS", "Dashboard isteği geçersiz.");
-  const request = parsed.data, account = await resolveAccount();
+  const request = parsed.data, account = await resolveAccount(signal);
   if ((requireScope && request.action !== "get") || expectedScope !== undefined) {
     if (typeof expectedScope !== "string" || expectedScope !== account.scope) fail("AUTH_REQUIRED", "Dashboard hesabı değişti. Yeniden bağlanıp işlemi tekrar başlatın.");
   }

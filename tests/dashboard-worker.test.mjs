@@ -35,9 +35,9 @@ const dispatch = (message, sender = dashboardSender) => new Promise(resolve => l
 function emitter() { const listeners = new Set(); return { addListener(fn) { listeners.add(fn); }, emit(v) { for (const fn of listeners) fn(v); } }; }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 async function until(fn) { for (let i = 0; i < 100 && !fn(); i++) await tick(); assert.ok(fn()); }
-function port(sender) {
+function port(sender, name = "DASHBOARD_ANALYSIS") {
  const events = [], onMessage = emitter(), onDisconnect = emitter(); let closed = false;
- const instance = { name: "DASHBOARD_ANALYSIS", sender, onMessage, onDisconnect, postMessage(e) { events.push(e); }, disconnect() { closed = true; onDisconnect.emit(); } };
+ const instance = { name, sender, onMessage, onDisconnect, postMessage(e) { events.push(e); }, disconnect() { closed = true; onDisconnect.emit(); } };
  connect(instance); return { instance, events, send: x => onMessage.emit(x), get closed() { return closed; } };
 }
 test("only the exact extension dashboard page may read personal state", async () => {
@@ -64,6 +64,12 @@ test("analysis ports reject content scripts and malformed input", async () => {
  assert.equal(port(jobSender).closed, true); assert.equal(port({ ...dashboardSender, id: "foreign" }).closed, true);
  const c = port(dashboardSender); c.send({ jobId: "bad", resumeId: "cv-A" }); await until(() => c.events.some(e => e.type === "done"));
  assert.equal(c.events.at(-1).result.code, "INVALID_ARGUMENTS"); c.instance.disconnect();
+});
+
+test("automatic connection ports reject every sender except the dashboard", () => {
+ for (const sender of [jobSender, { ...dashboardSender, id: "foreign" }, { ...dashboardSender, url: "chrome-extension://" + extensionId + "/src/options/options.html" }]) {
+  assert.equal(port(sender, "DASHBOARD_AUTO_CONNECT").closed, true);
+ }
 });
 test("disconnect cancels streamed dashboard analysis and sends no late results", async () => {
  const c = port(dashboardSender); c.send({ scope, jobId: "123", resumeId: "cv-A" });

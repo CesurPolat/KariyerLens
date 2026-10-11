@@ -3,6 +3,10 @@
 const pause = () => new Promise(resolve => setTimeout(resolve, 30));
 const params = new URL(location.href).searchParams;
 const results = document.getElementById("results"), calls = [];
+const autoPorts = [];
+let accountConnected = false;
+let storedAutoConnect = params.has("auto-enabled");
+const preferenceWrites = [];
 const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Istanbul" });
 const empty = { version: 1, applications: [], experiments: [], resumeViews: { records: [], fetchedAt: null, partial: true, error: "" }, preferences: { keyword: "", cities: [], workModels: [], resumeId: "" }, discovery: { jobs: [], seen: {}, fetchedAt: null, currentPage: 1, total: 0, options: { cities: [], workModels: [] } } };
 const variant = (label, name) => ({ id: "variant-" + label, label, name, resumeId: "cv-" + label, content: { summary: "React TypeScript SQL" }, fetchedAt: Date.now(), truncated: false });
@@ -17,11 +21,17 @@ if (!params.has("empty") && !params.has("auth")) {
 if (params.has("table")) state.applications.push(...Array.from({ length: 20 }, (_, i) => example(String(800 + i), "Pozisyon " + i, "Şirket " + i, "applied")));
 const resumes = [{ id: "cv-A", name: "Teknik CV", updatedAt: today }, { id: "cv-B", name: "Proje Odaklı CV", updatedAt: today }];
 function events() { const handlers = new Set(); return { addListener(fn) { handlers.add(fn); }, emit(value) { for (const fn of handlers) fn(value); } }; }
-window.chrome = { runtime: {
+window.chrome = { storage: { local: {
+  async get(key) { return { [key]: storedAutoConnect }; },
+  async set(value) {
+    if (params.has("preference-error")) throw new Error("Storage unavailable");
+    preferenceWrites.push(value); storedAutoConnect = value.dashboardAutoConnectEnabled;
+  },
+} }, runtime: {
   async openOptionsPage() { calls.push({ type: "OPEN_OPTIONS" }); },
   async sendMessage(message) {
     calls.push(message);
-    if (params.has("auth")) return { ok: false, code: "AUTH_REQUIRED", message: "Kariyer.net hesabınızda oturum açıp profil sayfasını yenileyin." };
+    if (params.has("auth") && !accountConnected) return { ok: false, code: "AUTH_REQUIRED", message: "Kariyer.net hesabınızda oturum açıp profil sayfasını yenileyin." };
     const request = message.payload;
     if (request.action === "refresh") state.resumeViews = { records: [{ resumeId: "cv-A", resumeName: "Teknik CV", jobId: "123", jobName: "Frontend Geliştirici", companyName: "Nova Teknoloji", viewedAt: today, viewCount: 3 }], fetchedAt: Date.now(), partial: true, error: "" };
     if (request.action === "importApplications") {
@@ -48,8 +58,23 @@ window.chrome = { runtime: {
     }
     return { ok: true, scope: "a".repeat(64), data: structuredClone(state) };
   },
-  connect() {
+  connect(options) {
     const onMessage = events(), onDisconnect = events(); let closed = false;
+    if (options?.name === "DASHBOARD_AUTO_CONNECT") {
+      const messages = [];
+      const instance = { onMessage, onDisconnect, messages,
+        postMessage(message) {
+          messages.push(message);
+          if (message.type === "start") onMessage.emit({ type: "status", text: "Bağlantı bekleniyor…" });
+          if (message.type === "applied") {
+            accountConnected = true;
+            document.dispatchEvent(new Event("visibilitychange"));
+            setTimeout(() => !closed && onMessage.emit({ type: "done", result: { ok: true } }), 30);
+          }
+        }, disconnect() { closed = true; onDisconnect.emit(); },
+      };
+      autoPorts.push(instance); return instance;
+    }
     return { onMessage, onDisconnect, postMessage() { if (params.has("analysis-error")) { setTimeout(() => !closed && onMessage.emit({ type: "done", result: { ok: false, code: "NETWORK_ERROR", message: "Örnek AI bağlantı hatası." } }), 40); return; }
       onMessage.emit({ type: "status", text: "Sabit CV içerikleri inceleniyor…" });
       setTimeout(() => { if (!closed) onMessage.emit({ type: "text", content: "## Uygunluk\nReact deneyimin ilanla örtüşüyor." }); }, 100);
@@ -66,10 +91,74 @@ async function run() {
   const page = new DOMParser().parseFromString(await (await fetch(url)).text(), "text/html");
   for (const link of page.querySelectorAll('link[rel="stylesheet"]')) { const style = document.createElement("link"); style.rel = "stylesheet"; style.href = new URL(link.getAttribute("href"), url); document.head.append(style); }
   await import(new URL(page.querySelector('script[type="module"]').getAttribute("src"), url).href);
-  await until(() => document.querySelector(".stats") || document.querySelector(".alert.error"));
+  await until(() => document.querySelector(".stats") || document.querySelector(".alert.error") || document.querySelector(".connection-status"));
   check(!calls.some(c => c.payload?.action === "search"), "Açılışta ilan araması yapılmaz");
   if (params.has("interactive")) { results.textContent = "Örnek veriler · Gerçek hesaba, depolamaya veya AI sağlayıcısına erişilmez."; return; }
-  if (params.has("auth")) { check(!document.querySelector(".stats"), "Oturum yokken kişisel kayıtlar gösterilmez"); check(document.querySelector('[role="alert"]'), "Oturum hatası görünür"); return; }
+  if (params.has("auth")) {
+    if (params.has("auto-enabled")) {
+      await until(() => button("İptal"));
+      check(autoPorts.length === 1, "Kaydedilmiş tercih açılışta otomatik bağlantı başlatır");
+      check(preferenceWrites.length === 0, "Kaydedilmiş tercih açılışta yeniden yazılmaz");
+      button("İptal").click(); await until(() => !button("İptal"));
+      document.dispatchEvent(new Event("visibilitychange")); await pause(); await pause();
+      check(autoPorts.length === 1, "İptal aynı ekranda yeniden sekme açma döngüsü başlatmaz");
+      check(storedAutoConnect, "İptal kalıcı tercihi kapatmaz");
+      button("Otomatik bağlantıyı kapat").click(); await until(() => !storedAutoConnect && button("Otomatik bağlan") && !button("Otomatik bağlan").disabled);
+      button("Yeniden bağlan").click(); await pause(); await pause();
+      check(autoPorts.length === 1, "Tercih kapatılınca oturum hatası otomatik bağlantı başlatmaz");
+      results.textContent += "\nTüm kalıcı tercih açılış testleri geçti."; return;
+    }
+    check(!document.querySelector(".stats"), "Oturum yokken kişisel kayıtlar gösterilmez");
+    check(document.querySelector('[role="alert"]'), "Oturum hatası görünür");
+    check(button("Otomatik bağlan"), "Manuel bağlantının yanında otomatik bağlantı görünür");
+    if (params.has("auto-preference") || params.has("preference-error")) {
+      const trigger = button("Otomatik bağlan"); trigger.click(); trigger.click();
+      if (params.has("preference-error")) {
+        await until(() => document.querySelector('[role="alert"]').textContent.includes("kaydedilemedi"));
+        check(!storedAutoConnect && autoPorts.length === 0, "Kaydetme hatası tercihi etkin göstermez veya bağlantı başlatmaz");
+        button("Kariyer.net’i aç").click(); await until(() => button("İptal"));
+        check(autoPorts.length === 1, "Tercih kaydedilemese bile tek seferlik bağlantı çalışır");
+        button("İptal").click(); results.textContent += "\nTercih hata testi geçti."; return;
+      }
+      await until(() => button("İptal"));
+      check(storedAutoConnect && preferenceWrites.length === 1, "Otomatik bağlan tercihi bir kez kalıcı kaydeder");
+      check(autoPorts.length === 1, "Tercih etkinleştirilince tek bağlantı başlar");
+      button("İptal").click(); await until(() => !button("İptal"));
+      check(storedAutoConnect, "İptal tercihi korur");
+      button("Yeniden bağlan").click(); await until(() => button("İptal"));
+      check(autoPorts.length === 2, "Sonraki oturum hatasında düğmeye tekrar basmadan otomatik bağlanılır");
+      button("İptal").click(); await until(() => !button("İptal"));
+      button("Otomatik bağlantıyı kapat").click(); await until(() => !storedAutoConnect && button("Otomatik bağlan") && !button("Otomatik bağlan").disabled);
+      check(preferenceWrites.length === 2 && button("Otomatik bağlan"), "Otomatik bağlantı kalıcı kapatılabilir");
+      results.textContent += "\nTüm kalıcı tercih testleri geçti."; return;
+    }
+    if (params.has("auto-connect")) {
+      const trigger = button("Kariyer.net’i aç"); trigger.click(); trigger.click();
+      await until(() => button("İptal"));
+      check(autoPorts.length === 1, "Tekrarlı tıklama tek bağlantı açar");
+      check(button("Yeniden bağlan").disabled, "Bağlantı sırasında manuel yeniden bağlan devre dışı");
+      button("İptal").click(); await until(() => !button("İptal"));
+      autoPorts[0].onMessage.emit({ type: "connected", result: { ok: true, scope: "b".repeat(64), data: structuredClone(state) } });
+      await pause(); check(!document.querySelector(".stats"), "İptalden sonra geç gelen sonuç uygulanmaz");
+      button("Kariyer.net’i aç").click(); await until(() => button("İptal"));
+      autoPorts[1].onDisconnect.emit(); await until(() => !button("İptal"));
+      check(document.querySelector('[role="alert"]').textContent.includes("kesildi"), "Port kopması yeniden denemeyi sunar");
+      button("Kariyer.net’i aç").click(); await until(() => button("İptal"));
+      autoPorts[2].onMessage.emit({ type: "done", result: { ok: false, code: "CONNECTION_TIMEOUT", message: "Bağlantı zaman aşımına uğradı." } });
+      await until(() => !button("İptal"));
+      check(!button("Yeniden bağlan").disabled, "Zaman aşımı işlem kilidini kaldırır");
+      button("Kariyer.net’i aç").click(); await until(() => button("İptal"));
+      const initialGets = calls.length;
+      autoPorts[3].onMessage.emit({ type: "connected", result: { ok: true, scope: "a".repeat(64), data: structuredClone(state), resumes } });
+      await until(() => document.querySelector(".stats") && !button("Yeniden bağlan").disabled);
+      check(autoPorts[3].messages.some(m => m.type === "applied"), "Dashboard verisi uygulandıktan sonra sekme kapatma onayı gönderilir");
+      check(calls.length === initialGets, "Sekmeden dönüş hesap verisini sıfırlamaz veya tekrar istek başlatmaz");
+      check(!document.querySelector('[role="alert"]') && !button("İptal"), "Başarı hata ve bekleme durumlarını temizler");
+      check(!storedAutoConnect && preferenceWrites.length === 0, "Kariyer.net’i aç tek seferlik bağlanır ve kalıcı tercihi değiştirmez");
+      results.textContent += "\nTüm otomatik bağlantı tarayıcı testleri geçti.";
+    }
+    return;
+  }
   if (params.has("table")) {
     check(document.querySelectorAll(".application-table:not(.resume-view-table) tbody tr").length === 10, "Uzun liste ilk sayfada 10 satır gösterir");
     button("Sonraki").click(); await pause();
