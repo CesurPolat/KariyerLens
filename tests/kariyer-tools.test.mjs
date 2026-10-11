@@ -46,9 +46,35 @@ test("unknown tools, injected parameters and missing credentials never fetch", a
     ["get_salary_by_position", { positionId: "../x" }, "INVALID_ARGUMENTS"],
     ["get_resumes", {}, "AUTH_REQUIRED"],
     ["get_resume", {}, "INVALID_ARGUMENTS"],
-    ["get_resume", { resumeId: "id&other=value" }, "INVALID_ARGUMENTS"],
+    ["get_resume", { resumeId: "id\nother" }, "INVALID_ARGUMENTS"],
+    ["get_resume", { resumeId: " " }, "INVALID_ARGUMENTS"],
+    ["get_resume", { resumeId: "x".repeat(513) }, "INVALID_ARGUMENTS"],
     ["get_resume", { resumeId: "example==!e!" }, "AUTH_REQUIRED"],
   ]) assert.equal((await callKariyerTool(name, input, "123", {}, noFetch)).code, code);
+});
+
+test("opaque CV identifiers stay in a single encoded query parameter", async () => {
+  for (const resumeId of ["cv.with:punctuation~%2B", "id&other=value#fragment?query", "example+id/==!e!"]) {
+    const result = await callKariyerTool("get_resume", { resumeId }, "", credentials, async (url) => {
+      assert.equal(url.origin, candidate);
+      assert.equal(url.pathname, "/jb/api/candidates/resume");
+      assert.deepEqual([...url.searchParams], [["resumeId", resumeId]]);
+      assert.equal(url.hash, "");
+      return Response.json({ result: { summary: "CV" } });
+    });
+    assert.equal(result.ok, true);
+  }
+});
+
+test("validation errors identify the tool and field without disclosing input values", async () => {
+  const noFetch = () => assert.fail("unexpected network request");
+  const result = await callKariyerTool("get_resume", { resumeId: "private\nidentifier" }, "", credentials, noFetch);
+  assert.equal(result.code, "INVALID_ARGUMENTS");
+  assert.match(result.message, /get_resume.*resumeId/);
+  assert.doesNotMatch(result.message, /private|identifier/);
+  const extra = await callKariyerTool("get_resume", { resumeId: "cv", "secret-field": "secret-value" }, "", credentials, noFetch);
+  assert.equal(extra.code, "INVALID_ARGUMENTS");
+  assert.doesNotMatch(extra.message, /secret/);
 });
 
 test("resume list identifiers support a bearer GET detail request without losing special characters", async () => {

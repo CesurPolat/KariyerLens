@@ -1371,7 +1371,7 @@ GET https://candidatewebapigw.kariyer.net/jb/api/candidates/resume?resumeId=<URL
 Authorization: Bearer <SESSION_TOKEN>
 ```
 
-`resumeId` zorunlu string parametredir; özgeçmiş listesindeki `encryptedId` değerinden alınır. `get_resumes` bu değeri `resumeId` adıyla döndürür. Kimlik URL'ye `URLSearchParams` ile eklenir; `+`, `/`, `=` gibi karakterler kodlanır. Gerçek aday kimliği kaynak koda sabitlenmez. Tool şeması 1–512 karakter ve kimlikte kullanılan harf, sayı, `+`, `/`, `=`, `_`, `!`, `-` karakterlerini kabul eder; bunlar yerel doğrulama sınırlarıdır.
+`resumeId` zorunlu string parametredir; özgeçmiş listesindeki `encryptedId` değerinden alınır. `get_resumes` bu değeri `resumeId` adıyla döndürür. Kimlik URL'ye `URLSearchParams` ile tek bir parametre değeri olarak eklenir; özel karakterler kodlanır. Gerçek aday kimliği kaynak koda sabitlenmez. Tool şeması 1–512 karakter kabul eder, boşluk ve kontrol karakterlerini reddeder. Kimliğin biçimi yorumlanmaz veya değiştirilmez; bunlar yerel doğrulama sınırlarıdır.
 
 Anonimleştirilmiş, kısaltılmış yanıt örneği:
 

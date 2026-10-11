@@ -5,6 +5,8 @@ const SEARCH = "https://candidatesearchapigateway.kariyer.net";
 const CANDIDATE = "https://candidatewebapigw.kariyer.net";
 const id = z.string().regex(/^\d{1,16}$/);
 const keyword = z.string().trim().min(1).max(200);
+// CV identifiers are opaque API values; URLSearchParams encodes them as one value.
+const resumeId = z.string().min(1).max(512).regex(/^[^\s\u0000-\u001f\u007f]+$/);
 const size = z.number().int().min(1).max(50);
 const offset = z.number().int().min(0).max(10000);
 const empty = z.object({}).strict();
@@ -44,7 +46,7 @@ export const KARIYER_TOOLS: Endpoint[] = [
   { name: "search_jobs", description: "Anahtar kelime ve belgelenmiş filtre kodlarıyla ilan arar. Kodları tahmin etme; arama filtrelerinden veya kullanıcıdan edin. Kişisel filtreler için memberId aday profilinden alınır.", origin: SEARCH, path: "/search", schema: searchSchema, method: "POST", fixed: { dontAddLog: true } },
   { name: "get_related_searches", description: "Anahtar kelimeyle ilgili arama terimlerini getirir.", origin: SEARCH, path: "/Search/relatedsearch", schema: z.object({ keyword }).strict(), method: "POST" },
   { name: "get_resumes", description: "Adayın özgeçmişlerini listeler; tam CV içeriğini getirmez.", origin: CANDIDATE, path: "/jb/api/candidates/resumes", schema: page("skip", 8), auth: "bearer", assumedGet: true },
-  { name: "get_resume", description: "Adayın seçili özgeçmişinin detaylarını getirir. resumeId değerini get_resumes sonucundan al; kimlik tahmin etme.", origin: CANDIDATE, path: "/jb/api/candidates/resume", schema: z.object({ resumeId: z.string().min(1).max(512).regex(/^[A-Za-z0-9+/=_!\-]+$/) }).strict(), auth: "bearer" },
+  { name: "get_resume", description: "Adayın seçili özgeçmişinin detaylarını getirir. resumeId değerini get_resumes sonucundan al; kimlik tahmin etme.", origin: CANDIDATE, path: "/jb/api/candidates/resume", schema: z.object({ resumeId }).strict(), auth: "bearer" },
   { name: "get_resume_views", description: "Aday özgeçmişlerinin şirketler tarafından görüntülenme kayıtlarını listeler.", origin: CANDIDATE, path: "/jb/api/candidates/resumes/view", schema: page("skip", 8), auth: "bearer", fixed: { ClientType: 1 } },
   { name: "get_cover_letters", description: "Adayın kayıtlı ön yazılarını listeler.", origin: CANDIDATE, path: "/coverletters", schema: page("index", 10), auth: "bearer" },
   { name: "get_followed_companies", description: "Adayın takip ettiği şirketleri listeler.", origin: SEARCH, path: "/Search/my-followed-companies", schema: empty, auth: "bearer" },
@@ -77,7 +79,13 @@ export async function callKariyerTool(name: string, input: unknown, jobId: strin
   const endpoint = KARIYER_TOOLS.find(item => item.name === name);
   if (!endpoint) return failure("UNKNOWN_TOOL", "Bilinmeyen Kariyer.net aracı.");
   const parsed = endpoint.schema.safeParse(input);
-  if (!parsed.success || (endpoint.currentJob && !id.safeParse(jobId).success)) return failure("INVALID_ARGUMENTS", "Araç parametreleri geçersiz.");
+  if (!parsed.success) {
+    const fields = [...new Set(parsed.error.issues.map(issue => String(issue.path[0] ?? "input")))];
+    const allowedFields = Object.keys(endpoint.schema.shape);
+    const labels = fields.map(field => allowedFields.includes(field) ? field : "beklenmeyen alan");
+    return failure("INVALID_ARGUMENTS", `${name}: Araç parametreleri geçersiz (${labels.join(", ")}).`);
+  }
+  if (endpoint.currentJob && !id.safeParse(jobId).success) return failure("INVALID_ARGUMENTS", `${name}: İlan kimliği geçersiz.`);
   if (endpoint.auth && !credentials[endpoint.auth]) return failure("AUTH_REQUIRED", "Kariyer.net hesabınızda oturum açıp ilgili sayfayı yenileyin. Gerekli oturum başlığı henüz alınamadı.");
   const url = new URL(endpoint.path, endpoint.origin);
   const params = { ...parsed.data, ...endpoint.fixed, ...(endpoint.currentJob ? { jobId } : {}) };

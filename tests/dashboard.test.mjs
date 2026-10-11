@@ -11,6 +11,7 @@ let currentId = "101", token = "Bearer account-one", cvVersion = "SQL", apiMode 
 let providerBody;
 let importMode = "ok", detailMode = "ok";
 let viewsMode = "ok";
+let secondResumeId = "cv-B";
 const importJob = id => ({ id, title: "İçe aktarılan " + id, companyName: "İçe aktarma AŞ", jobUrl: "/is-ilani/ilan-" + id });
 const candidate = "https://candidatewebapigw.kariyer.net", search = "https://candidatesearchapigateway.kariyer.net";
 globalThis.chrome = { storage: { local: { async get(key) { return key === "chatSettings" ? { chatSettings: { provider: "openai", providers: { openai: { apiKey: "test-secret", model: "test" } } } } : structuredClone({ [key]: db[key] }); }, async set(value) { Object.assign(db, structuredClone(value)); } } } };
@@ -36,7 +37,7 @@ globalThis.fetch = async (input, options) => {
     { interactionStatus: 1, interactionDate: "2026-10-03T12:00:00", interactionStatusText: "Özgeçmişin Görüntülendi" },
     { interactionStatus: 99, interactionDate: "2026-10-04T12:00:00", interactionStatusText: "Bilinmeyen durum" },
   ] });
-  if (url.pathname === "/jb/api/candidates/resumes") return Response.json({ statusCode: 200, result: { resumeList: [{ encryptedId: "cv+A=", resumeName: "CV A", lastUpdateDate: "2026-10-01" }, { encryptedId: "cv-B", resumeName: "CV B" }], totalCount: 2 } });
+  if (url.pathname === "/jb/api/candidates/resumes") return Response.json({ statusCode: 200, result: { resumeList: [{ encryptedId: "cv+A=", resumeName: "CV A", lastUpdateDate: "2026-10-01" }, { encryptedId: secondResumeId, resumeName: "CV B" }], totalCount: 2 } });
   if (url.pathname === "/jb/api/candidates/resumes/view") {
     assert.equal(url.searchParams.get("skip"), "0"); assert.equal(url.searchParams.get("size"), "8");
     assert.equal(url.searchParams.get("ClientType"), "1");
@@ -389,4 +390,17 @@ test("refresh saves CV views, preserves successful cache on failures, and isolat
   assert.equal((await invoke({ action: "get" })).data.resumeViews.records.length, 0);
   currentId = prior; capture("Bearer view-account-restored");
   assert.deepEqual((await invoke({ action: "get" })).data.resumeViews.records, good.records);
+});
+
+test("A/B creation preserves opaque CV identifiers from the account list", async () => {
+  secondResumeId = "cv.B:%2B~&other=value";
+  try {
+    const listed = await invoke({ action: "resumes" });
+    assert.ok(listed.resumes.some(r => r.id === secondResumeId));
+    const result = await invoke({ action: "createExperiment", name: "Opaque IDs", resumeA: "cv+A=", resumeB: secondResumeId });
+    assert.equal(result.ok, true);
+    const variants = result.data.experiments[0].variants;
+    assert.deepEqual(variants.map(v => v.resumeId), ["cv+A=", secondResumeId]);
+    assert.deepEqual(variants.map(v => v.content.title), ["cv+A=", secondResumeId]);
+  } finally { secondResumeId = "cv-B"; }
 });
