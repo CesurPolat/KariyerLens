@@ -126,6 +126,7 @@ export function useDashboard() {
           setError(failure); resetAccount(); needsConnection = true; return failure;
         }
         applyReply(result);
+        if (request.action === "resetExperiments") resetAnalysis();
         if (request.action !== "importApplications") { setNotice(result.notice || ""); return result; }
         const summary = result.importSummary;
         if (!summary) throw new Error("Import response missing");

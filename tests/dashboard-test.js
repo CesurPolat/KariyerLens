@@ -47,7 +47,7 @@ window.chrome = { storage: { local: {
     if (request.action === "update") Object.assign(state.applications.find(a => a.jobId === request.jobId), request.patch);
     if (request.action === "remove") state.applications = state.applications.filter(a => a.jobId !== request.jobId);
     if (request.action === "track" && !state.applications.some(a => a.jobId === request.jobId)) state.applications.push(example(request.jobId, "Yeni ilan", "Örnek şirket", "saved"));
-    if (request.action === "createExperiment") state.experiments.unshift({ id: "test-new", name: request.name, createdAt: Date.now(), variants: [variant("A", "Teknik CV"), variant("B", "Proje Odaklı CV")] });
+    if (request.action === "createExperiment") state.experiments.unshift({ id: "test-new", name: request.name ?? "Teknik CV / Proje Odaklı CV", createdAt: Date.now(), variants: [variant("A", "Teknik CV"), variant("B", "Proje Odaklı CV")] });
     if (request.action === "search") {
       state.preferences = request.preferences;
       state.discovery = { jobs: [
@@ -209,12 +209,12 @@ async function run() {
   check(document.querySelectorAll(".sample-count")[1].textContent.startsWith("0"), "Çelişen manuel B ataması API hesabını değiştirmez");
   if (params.has("one-cv")) check(document.querySelector(".test-create button").disabled, "Tek CV ile A/B oluşturma kapalıdır");
   else {
-    input(document.querySelector(".test-create input"), "Arayüz CV testi");
+    check(!document.querySelector(".test-create input"), "Test adı girmeye gerek yoktur");
     const selectors = document.querySelectorAll(".test-create select");
     selectors[0].value = "cv-A"; selectors[0].dispatchEvent(new Event("change", { bubbles: true })); await pause();
     selectors[1].value = "cv-B"; selectors[1].dispatchEvent(new Event("change", { bubbles: true })); await pause();
     document.querySelector(".test-create").closest("form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await pause();
-    check(state.experiments[0].name === "Arayüz CV testi", "İki CV ile yeni test oluşturulur");
+    check(state.experiments[0].name === "Teknik CV / Proje Odaklı CV", "İki CV ile otomatik adlandırılan test oluşturulur");
   }
   button("Bana Uygun İlanlar").click(); await pause(); check(!calls.some(c => c.payload?.action === "search"), "İlan bölümüne geçiş arama başlatmaz");
   button("Yenile").click(); await pause(); check(document.querySelectorAll(".discovery-table tbody tr").length === 3, "İlanlar tek tabloda çizilir");

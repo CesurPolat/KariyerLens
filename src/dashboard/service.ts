@@ -140,6 +140,14 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
   let notice = "";
   let importSummary: ApplicationImportSummary | undefined;
   if (request.action === "resumes") return { ok: true as const, resumes: await resumes(account), notice: "", scope: account.scope };
+  if (request.action === "resetExperiments") {
+    await account.transaction(s => {
+      const variantIds = new Set(s.experiments.flatMap(e => e.variants.map(v => v.id)));
+      s.experiments = [];
+      for (const app of s.applications) if (variantIds.has(app.variantId)) app.variantId = "";
+    });
+    notice = "A/B testleri sıfırlandı. Başvuruların korundu.";
+  }
   if (request.action === "track") {
     const job = await getJob(request.jobId); account.guard(); if (!job.ok) throw new DashboardError(job.code, job.message);
     if (job.data.id !== request.jobId) fail("INVALID_RESPONSE", "İlan kimliği eşleşmedi.");
@@ -173,7 +181,8 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
     const list = await resumes(account), a = list.find(r => r.id === request.resumeA), b = list.find(r => r.id === request.resumeB);
     if (!a || !b) fail("NOT_FOUND", "Seçilen CV hesapta bulunamadı.");
     const variants: [CvVariantSnapshot, CvVariantSnapshot] = [await snapshot(account, a, "A"), await snapshot(account, b, "B")];
-    await account.transaction(s => { s.experiments.unshift({ id: crypto.randomUUID(), name: request.name, createdAt: Date.now(), variants }); });
+    const name = request.name ?? `${a.name.trim().slice(0, 45) || "CV A"} / ${b.name.trim().slice(0, 45) || "CV B"}`;
+    await account.transaction(s => { s.experiments.unshift({ id: crypto.randomUUID(), name, createdAt: Date.now(), variants }); });
   }
   if (request.action === "importApplications") {
     importSummary = await importApplications(account, request.page, request.seenJobIds);

@@ -64,7 +64,8 @@ export const dashboardMessageSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("refresh") }).strict(),
   z.object({ action: z.literal("importApplications"), page: z.number().int().min(1).max(1000).default(1), seenJobIds: z.array(jobId).max(500).default([]) }).strict(),
   z.object({ action: z.literal("resumes") }).strict(),
-  z.object({ action: z.literal("createExperiment"), name: z.string().trim().min(1).max(100), resumeA: z.string().min(1).max(512), resumeB: z.string().min(1).max(512) }).strict(),
+  z.object({ action: z.literal("resetExperiments") }).strict(),
+  z.object({ action: z.literal("createExperiment"), name: z.string().trim().min(1).max(100).optional(), resumeA: z.string().min(1).max(512), resumeB: z.string().min(1).max(512) }).strict(),
   z.object({ action: z.literal("search"), preferences: preferencesSchema, page: z.number().int().min(1).max(1000) }).strict(),
 ]);
 export const analysisMessageSchema = z.object({ scope: z.string().regex(/^[a-f0-9]{64}$/), jobId, experimentId: z.string().max(100).optional(), resumeId: z.string().max(512).optional() }).strict()

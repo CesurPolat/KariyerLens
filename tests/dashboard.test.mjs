@@ -397,10 +397,27 @@ test("A/B creation preserves opaque CV identifiers from the account list", async
   try {
     const listed = await invoke({ action: "resumes" });
     assert.ok(listed.resumes.some(r => r.id === secondResumeId));
-    const result = await invoke({ action: "createExperiment", name: "Opaque IDs", resumeA: "cv+A=", resumeB: secondResumeId });
+    const result = await invoke({ action: "createExperiment", resumeA: "cv+A=", resumeB: secondResumeId });
     assert.equal(result.ok, true);
+    assert.equal(result.data.experiments[0].name, "CV A / CV B");
     const variants = result.data.experiments[0].variants;
     assert.deepEqual(variants.map(v => v.resumeId), ["cv+A=", secondResumeId]);
     assert.deepEqual(variants.map(v => v.content.title), ["cv+A=", secondResumeId]);
   } finally { secondResumeId = "cv-B"; }
+});
+
+test("resetting A/B tests clears their assignments while preserving other dashboard data", async () => {
+  const before = (await invoke({ action: "get" })).data;
+  const variantId = before.experiments[0].variants[0].id;
+  const app = before.applications[0];
+  await invoke({ action: "update", jobId: app.jobId, patch: { ...patch(app), variantId } });
+  const assigned = (await invoke({ action: "get" })).data;
+  const result = await invoke({ action: "resetExperiments" });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.data.experiments, []);
+  assert.deepEqual(result.data.applications, assigned.applications.map(a => ({ ...a, variantId: "" })));
+  assert.deepEqual(result.data.resumeViews, assigned.resumeViews);
+  assert.deepEqual(result.data.discovery, assigned.discovery);
+  assert.deepEqual(result.data.preferences, assigned.preferences);
+  assert.deepEqual((await invoke({ action: "get" })).data, result.data);
 });
