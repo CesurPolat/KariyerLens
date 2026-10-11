@@ -1203,6 +1203,34 @@ Bu yanıtın `filters.jobProperties.items` seçenekleri:
 
 Bu kod/ad eşleştirmeleri paylaşılan yanıtta doğrudan gözlendi. Bu örneğin toplamları önceki anahtar kelimeli veya çok filtreli aramanın sonucu değildir.
 
+### URL filtresiyle “Sana Uygun İlanlar” araması
+
+**Kaynak:** Kullanıcının paylaştığı `/search` adresi, istek alanları ve “Sana Uygun İlanlar” açıklaması. Mevcut endpoint kaydındaki POST yöntemi kullanılmıştır; bu örnek için yanıt veya başlıklar paylaşılmadı, canlı istek yapılmadı.
+
+**Adres:** `https://candidatesearchapigateway.kariyer.net/search`
+
+```json
+{
+  "calculateHiddenJobCount": true,
+  "currentPage": 1,
+  "memberId": "<MEMBER_ID>",
+  "size": 50,
+  "url": "___jp=1"
+}
+```
+
+`memberId` paylaşılan istekte sayıdır; kişisel aday kimliği dokümanda string yer tutucuyla anonimleştirilmiştir.
+
+| Alan | Paylaşılan değer / açıklama |
+| --- | --- |
+| `calculateHiddenJobCount` | Boolean; `true`, gizlenen ilan sayısının hesaplanmasını isteyen bayrak olarak yorumlandı |
+| `currentPage` | Sayı; `1`, ilk sayfa |
+| `memberId` | Sayı; aday/üye kimliği |
+| `size` | Sayı; `50`, istenen sonuç sayısı |
+| `url` | String; `___jp=1`, kullanıcının açıklamasına göre “Sana Uygun İlanlar” filtresi |
+
+Önceki profil araması örneğinde aynı etiket `jobProperties: ["1"]` ile gözlenmiştir. Bu yeni örnek filtreyi `url` alanında taşır; önceki gövdedeki ek bayraklar bu örneğe eklenmemiştir. İki biçimin sonuçlarının eşdeğerliği, diğer URL filtreleriyle birleşme kuralları, sayfalama URL'si ve kimlik doğrulama gereksinimleri bu örnek için doğrulanmadı. Önceki yanıttaki toplamlar bu isteğin sonucu olarak kabul edilmemelidir.
+
 ## İlgili aramalar — `POST /Search/relatedsearch`
 
 **Kaynak:** Kullanıcının paylaştığı URL, POST yöntemi, istek gövdesi ve JSON yanıtı. Canlı istek yapılmadı; endpoint henüz uzantının çalışma koduna entegre edilmedi.
