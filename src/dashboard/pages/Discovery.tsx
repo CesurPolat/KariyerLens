@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowUpRight, ListFilter, LogIn, Plus, RefreshCw, Sparkles } from "lucide-react";
 import type { DashboardState, ResumeSummary, JobDiscoveryPreferences } from "../models.js";
 import type { Act, Analyze } from "../ui-types.js";
@@ -11,6 +11,9 @@ import type { JobProvider } from "../../shared/job-provider.js";
 interface Props { state: DashboardState; resumes: ResumeSummary[]; busy: boolean; act: Act; analyze: Analyze; analysisPending: boolean; openIskur: () => Promise<void> }
 export function Discovery({ state, resumes, busy, act, analyze, analysisPending, openIskur }: Props) {
   const [prefs, setPrefs] = useState<JobDiscoveryPreferences>(() => ({ ...state.preferences, filters: initialSharedFilters(state.preferences, state.discovery.options, state.iskurDiscovery.options) }));
+  useEffect(() => {
+    if (resumes.length === 1) setPrefs(previous => previous.resumeId ? previous : { ...previous, resumeId: resumes[0].id });
+  }, [resumes]);
   const common = prefs.filters!;
   const provinces = sharedProvinceOptions(state.discovery.options, state.iskurDiscovery.options, prefs.providers);
   const supportsEmployment = (value: "full-time" | "part-time") => !prefs.providers.includes("kariyer") || state.discovery.options.workTypes.some(o => employmentKey(o.name) === value);
@@ -31,7 +34,8 @@ export function Discovery({ state, resumes, busy, act, analyze, analysisPending,
     </form>
     {prefs.providers.includes("iskur") && <section className="iskur-login" aria-label="İŞKUR girişi"><div><h3>İŞKUR hesabıyla devam et</h3><p>Açılan resmi sayfada İş Arayan Girişi’ni seçip aynı tarayıcıda giriş yap. Sonra buraya dönerek Yenile’ye bas; ilanlar ve analizler açık oturumunu kullanır.</p></div><button className="secondary" disabled={busy} onClick={() => { void openIskur(); }}><LogIn size={16} />İŞKUR’a giriş yap</button></section>}
     {!state.discovery.fetchedAt && !state.iskurDiscovery.fetchedAt && <p className="hint">İlk yenilemede kaynakların konum seçenekleri yüklenir. Arama yalnız sen yenilediğinde çalışır.</p>}
-    <div className="cv-choice"><label>Uyum analizinde kullanılacak CV<select value={prefs.resumeId} onChange={e => setPrefs({ ...prefs, resumeId: e.target.value })}><option value="">CV seç</option>{resumes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label><button className="secondary" disabled={busy} onClick={() => { void act({ action: "resumes" }); }}>CV’leri getir</button><p>Analiz et’e bastığında CV ve ilan seçtiğin AI sağlayıcısına gönderilir.</p></div>
+    <p id="cv-analysis-help" className={prefs.resumeId ? "muted" : "hint"}>{prefs.resumeId ? "Seçilen CV ile Kariyer.net ve İŞKUR ilanlarının uyumunu analiz edebilirsin." : "Uyum analizi için CV gerekli. CV’leri getir’e basıp Kariyer.net CV’ni seç. İŞKUR’a giriş yapmak CV seçiminin yerine geçmez; tek CV varsa otomatik seçilir."}</p>
+    <div className="cv-choice"><label>Uyum analizinde kullanılacak CV<select aria-describedby="cv-analysis-help" disabled={busy} value={prefs.resumeId} onChange={e => setPrefs({ ...prefs, resumeId: e.target.value })}><option value="">CV seç</option>{resumes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label><button className="secondary" disabled={busy} onClick={() => { void act({ action: "resumes" }); }}>CV’leri getir</button><p>Analiz et’e bastığında CV ve ilan seçtiğin AI sağlayıcısına gönderilir.</p></div>
   </section>
   {state.preferences.providers.map(provider => <ProviderResults key={provider} provider={provider} state={state} busy={busy} act={act} analyze={analyze} analysisPending={analysisPending} resumeId={prefs.resumeId} openIskur={openIskur} />)}
   </>;
@@ -51,7 +55,7 @@ function ProviderResults({ provider, state, busy, act, analyze, analysisPending,
     {!source.jobs.length ? <div className="empty"><Sparkles size={30} /><h3>{source.fetchedAt ? "Bu filtrelerle ilan bulunamadı" : "İlanları getirmek için Yenile’ye bas"}</h3></div> : <>
       <div className="table-wrap"><table className="application-table discovery-table"><thead><tr><th>Pozisyon / Şirket</th><th>Konum</th><th>{provider === "iskur" ? "Çalışma şekli" : "Çalışma modeli"}</th><th>Yayın tarihi</th><th>İlk görüldü</th><th>İşlemler</th></tr></thead><tbody>{visible.map(j => {
         const tracked = state.applications.some(a => jobKey(a) === jobKey(j));
-        return <tr key={jobKey(j)}><td><a className="job-title" href={j.jobUrl || jobUrlFor(provider, j.id)} target="_blank" rel="noopener noreferrer">{j.title} <ArrowUpRight size={13} /></a><span className="company-name">{j.companyName || "Şirket bilgisi mevcut değil"}</span></td><td>{j.location || "—"}</td><td>{j.workModel || "—"}</td><td>{dateLabel(j.publishedAt)}<small className={categoryOf(j) === "new" ? "new-badge" : "muted"}>{labels[categoryOf(j)]}</small></td><td>{dateLabel(j.firstSeenAt)}</td><td><div className="table-row-actions"><button className="secondary" disabled={busy || tracked} onClick={() => { void act({ action: "track", provider, jobId: j.id }); }}><Plus size={14} />{tracked ? "Takipte" : "Takibe ekle"}</button><button className="text-button" disabled={busy || analysisPending || !resumeId} onClick={() => analyze(j.id, { provider, resumeId }, "CV uyum analizi · " + j.title)}><Sparkles size={14} />Uyumu analiz et</button></div></td></tr>;
+        return <tr key={jobKey(j)}><td><a className="job-title" href={j.jobUrl || jobUrlFor(provider, j.id)} target="_blank" rel="noopener noreferrer">{j.title} <ArrowUpRight size={13} /></a><span className="company-name">{j.companyName || "Şirket bilgisi mevcut değil"}</span></td><td>{j.location || "—"}</td><td>{j.workModel || "—"}</td><td>{dateLabel(j.publishedAt)}<small className={categoryOf(j) === "new" ? "new-badge" : "muted"}>{labels[categoryOf(j)]}</small></td><td>{dateLabel(j.firstSeenAt)}</td><td><div className="table-row-actions"><button className="secondary" disabled={busy || tracked} onClick={() => { void act({ action: "track", provider, jobId: j.id }); }}><Plus size={14} />{tracked ? "Takipte" : "Takibe ekle"}</button><button className="text-button" title={!resumeId ? "Uyum analizi için önce CV’leri getirip bir CV seç." : undefined} aria-describedby={!resumeId ? "cv-analysis-help" : undefined} disabled={busy || analysisPending || !resumeId} onClick={() => analyze(j.id, { provider, resumeId }, "CV uyum analizi · " + j.title)}><Sparkles size={14} />Uyumu analiz et</button></div></td></tr>;
       })}</tbody></table></div>
       {!visible.length && <p className="empty-copy muted">Bu sayfada seçtiğin tarih grubunda ilan yok.</p>}
     </>}
