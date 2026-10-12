@@ -60,7 +60,7 @@ const failure = (code: string, message: string): Failure => ({ ok: false, code, 
 const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
 // Never pass session values or signed download links to the model provider.
-function sanitize(value: unknown, state: { remaining: number; characters: number; truncated: boolean }, depth = 0): unknown {
+function sanitize(value: unknown, state: { remaining: number; characters: number; truncated: boolean; arrayLimit: number }, depth = 0): unknown {
   if (state.remaining-- <= 0 || depth > 12) { state.truncated = true; return null; }
   if (typeof value === "string") {
     if (/^https?:\/\//i.test(value)) { try { const url = new URL(value); if (url.search || url.hash) return url.origin + url.pathname; } catch { return null; } }
@@ -70,12 +70,12 @@ function sanitize(value: unknown, state: { remaining: number; characters: number
     state.characters -= text.length;
     return text;
   }
-  if (Array.isArray(value)) { if (value.length > 50) state.truncated = true; return value.slice(0, 50).map(item => sanitize(item, state, depth + 1)); }
+  if (Array.isArray(value)) { if (value.length > state.arrayLimit) state.truncated = true; return value.slice(0, state.arrayLimit).map(item => sanitize(item, state, depth + 1)); }
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([key]) => !/token|authorization|cookie|password|apikey|secret|encrypt|encrpyt/i.test(key)).slice(0, 100).map(([key, item]) => [key, sanitize(item, state, depth + 1)]));
   return value;
 }
 
-export async function callKariyerTool(name: string, input: unknown, jobId: string, credentials: KariyerCredentials = {}, fetcher: typeof fetch = fetch, signal?: AbortSignal, project?: (data: unknown) => unknown): Promise<KariyerToolResult> {
+export async function callKariyerTool(name: string, input: unknown, jobId: string, credentials: KariyerCredentials = {}, fetcher: typeof fetch = fetch, signal?: AbortSignal, project?: (data: unknown) => unknown, projectionLimits?: { maxArrayLength: 50 | 200 }): Promise<KariyerToolResult> {
   const endpoint = KARIYER_TOOLS.find(item => item.name === name);
   if (!endpoint) return failure("UNKNOWN_TOOL", "Bilinmeyen Kariyer.net aracı.");
   const parsed = endpoint.schema.safeParse(input);
@@ -108,7 +108,7 @@ export async function callKariyerTool(name: string, input: unknown, jobId: strin
     const envelope = record(raw), header = record(envelope.header);
     if ((envelope.statusCode !== undefined && !["Success", 200, "200"].includes(envelope.statusCode as string | number)) || header.isSuccess === false || envelope.isSuccess === false || record(envelope.body).isSuccess === false)
       return failure("API_ERROR", "Kariyer.net işlemi başarısız olarak bildirdi.");
-    const state = { remaining: 2000, characters: 30000, truncated: false };
+    const state = { remaining: 2000, characters: 30000, truncated: false, arrayLimit: project ? projectionLimits?.maxArrayLength ?? 50 : 50 };
     let data: unknown = envelope.data ?? envelope.result ?? envelope.body ?? raw;
     // The list's opaque CV identifier is needed for get_resume, but is not a session credential.
     if (name === "get_resumes" && Array.isArray(record(data).resumeList)) {

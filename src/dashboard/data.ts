@@ -97,20 +97,25 @@ export function experimentMetrics(apps: TrackedApplication[], variantId: string,
     totalViews: cvViews.reduce((sum, v) => sum + v.viewCount, 0),
     responded: count(a => a.responded), interviewed: count(a => a.interviewed), offered: count(a => a.offered) };
 }
-/** Extract before the generic tool budget: filters and unused fields must not truncate job cards. */
-export function projectSearch(value: unknown): unknown {
-  const data = object(value), jobs = object(data.jobs), filters = object(data.filters);
+/** Options may contain more than 50 cities and use either locations or location. */
+export function projectSearchOptions(value: unknown) {
+  const data = object(value), filters = object(data.filters);
   const options = (group: unknown) => {
-    const items = object(group).items;
+    const items = Array.isArray(group) ? group : object(group).items;
     return Array.isArray(items) ? items.slice(0, 200).map(v => { const o = object(v); return { id: string(o.id ?? o.code ?? o.value, 30), name: string(o.name ?? o.text ?? o.title, 200) }; }).filter(o => o.id && o.name) : [];
   };
-  const location = object(filters.location);
+  const location = object(filters.location ?? filters.locations);
+  return { options: { cities: options(filters.cities ?? location.cities ?? filters.locations), workModels: options(filters.workModels), workTypes: options(filters.workTypes) } };
+}
+/** Extract before the generic tool budget: filters and unused fields must not truncate job cards. */
+export function projectSearch(value: unknown): unknown {
+  const data = object(value), jobs = object(data.jobs);
   return { total: Number(data.totalJobCountWithOutSponsored ?? data.totalJobCount) || 0, currentPage: Number(data.currentPage ?? jobs.currentPage) || 1,
     items: Array.isArray(jobs.items) ? jobs.items.filter(v => { const j = object(v); return j.isSponsored !== true && j.isRealSponsored !== true; }).slice(0, DISCOVERY_PAGE_SIZE).map(v => { const j = object(v);
       return { id: string(j.id, 16), title: string(j.title, 500), companyName: string(j.companyName, 500), jobUrl: kariyerUrl(j.jobUrl),
         location: string(j.locationText, 300), workModel: string(j.workModelText ?? j.workModel, 100), publishedAt: string(j.publishDate ?? j.publishedAt ?? (j.jobDateStatus === "New" ? j.postingDate : ""), 100) };
     }) : null,
-    options: { cities: options(filters.cities ?? location.cities ?? filters.locations), workModels: options(filters.workModels), workTypes: options(filters.workTypes) } };
+    ...projectSearchOptions(data) };
 }
 export function cvContent(value: unknown): Record<string, unknown> {
   const data = object(value);

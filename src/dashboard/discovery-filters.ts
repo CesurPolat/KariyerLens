@@ -44,3 +44,10 @@ export function resolveSharedFilters(prefs: JobDiscoveryPreferences, provider: J
   const wholeCity = matches.find(o => normalized(o.name) === province || (province === "istanbul" && o.id === "998"));
   return { cities: wholeCity ? [wholeCity.id] : matches.map(o => o.id), workTypes, iskur: prefs.iskur };
 }
+
+export function needsKariyerFilterOptions(prefs: JobDiscoveryPreferences, options: Options): boolean {
+  return Boolean(prefs.filters?.province && !options.cities.some(o => provinceKey(o.name) === prefs.filters!.province))
+    || Boolean(prefs.filters?.employmentType && !options.workTypes.some(o => employmentKey(o.name) === prefs.filters!.employmentType))
+    || (!prefs.filters && prefs.cities.some(id => !options.cities.some(o => o.id === id)))
+    || prefs.workModels.some(id => !options.workModels.some(o => o.id === id));
+}

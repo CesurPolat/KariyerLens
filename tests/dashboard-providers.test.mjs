@@ -31,9 +31,10 @@ globalThis.fetch = async (input, options = {}) => {
     if (mode === "kariyer-failure") return new Response("error", { status: 503 });
     const body = JSON.parse(options.body);
     const imported = body.jobProperties.includes("5");
+    const cities = mode === "many-cities" ? [...Array.from({ length: 80 }, (_, i) => ({ id: String(1000 + i), name: "Şehir " + i })), { id: "48", name: "Muğla" }] : [{ id: "34", name: "İstanbul" }];
     return Response.json({ data: { currentPage: body.currentPage, totalJobCount: imported ? 1 : 100,
       jobs: { items: [{ id: imported ? "00000000123" : String(body.currentPage * 1000), title: "Kariyer React", jobUrl: "/is-ilani/react-1000", companyName: "AŞ" }] },
-      filters: { cities: { items: [{ id: "34", name: "İstanbul" }] }, workModels: { items: [] }, workTypes: { items: [{ id: "full-code", name: "Tam Zamanlı" }, { id: "part-code", name: "Yarı Zamanlı" }] } } } });
+      filters: { locations: { cities: { items: cities } }, workModels: { items: [] }, workTypes: { items: [{ id: "full-code", name: "Tam Zamanlı" }, { id: "part-code", name: "Yarı Zamanlı" }] } } } });
   }
   if (url.pathname === "/jb/api/candidates/resumes/view") return Response.json([]);
   if (url.pathname === "/candidates/job_apply_status") return Response.json({ isCandidateAppliedJob: false });
@@ -92,6 +93,36 @@ test("one shared province and employment selection maps to each provider's own f
   assert.deepEqual(second.data.discovery.appliedPreferences.filters, filters);
   const pageRequest = JSON.parse(requests.filter(r => r.url.pathname === "/search").at(-1).options.body);
   assert.deepEqual(pageRequest.location.cities, ["34"]); assert.deepEqual(pageRequest.workTypes, ["full-code"]);
+});
+
+test("Kariyer search retains 81 locations and repairs a previously truncated catalog before applying the province", async () => {
+  mode = "many-cities";
+  const prefs = { ...emptyDashboard().preferences, providers: ["kariyer"] };
+  const first = await invoke({ action: "search", preferences: prefs, page: 1 });
+  assert.equal(first.data.discovery.error, ""); assert.equal(first.data.discovery.options.cities.length, 81);
+  const key = "kariyerLensDashboard:" + first.scope;
+  db[key].discovery.options.cities = db[key].discovery.options.cities.slice(0, 50);
+  requests.length = 0;
+  const result = await invoke({ action: "search", preferences: { ...prefs, filters: { province: "mugla", employmentType: "full-time" } }, page: 1 });
+  assert.equal(result.data.discovery.error, ""); assert.equal(result.data.discovery.options.cities.length, 81);
+  const calls = requests.filter(r => r.url.pathname === "/search").map(r => JSON.parse(r.options.body));
+  assert.equal(calls.length, 2); assert.equal(calls[0].location, undefined);
+  assert.deepEqual(calls[1].location.cities, ["48"]); assert.deepEqual(calls[1].workTypes, ["full-code"]);
+  assert.equal(result.data.discovery.appliedPreferences.filters.province, "mugla");
+  requests.length = 0;
+  await invoke({ action: "search", provider: "kariyer", preferences: result.data.preferences, page: 2 });
+  assert.equal(requests.filter(r => r.url.pathname === "/search").length, 1);
+});
+
+test("a missing province in a fresh catalog preserves previous jobs without issuing an unrestricted result search", async () => {
+  const prefs = { ...emptyDashboard().preferences, providers: ["kariyer"] };
+  const first = await invoke({ action: "search", preferences: prefs, page: 1 });
+  requests.length = 0;
+  const result = await invoke({ action: "search", preferences: { ...prefs, filters: { province: "unknown", employmentType: "" } }, page: 1 });
+  assert.match(result.data.discovery.error, /Seçilen il/);
+  assert.deepEqual(result.data.discovery.jobs, first.data.discovery.jobs);
+  assert.equal(result.data.discovery.fetchedAt, first.data.discovery.fetchedAt);
+  assert.equal(requests.filter(r => r.url.pathname === "/search").length, 1);
 });
 test("same numeric identifiers remain separate through tracking, editing, deletion and account changes", async () => {
   const jobId = "00000000123";

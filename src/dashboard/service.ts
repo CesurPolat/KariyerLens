@@ -4,7 +4,7 @@ import { getJob } from "../shared/kariyer/kariyer-api.js";
 import { getIskurJob, searchIskur, IskurError } from "../shared/iskur/iskur-api.js";
 import { jobKey, jobUrlFor } from "../shared/job-provider.js";
 import type { JobProvider } from "../shared/job-provider.js";
-import { resolveSharedFilters } from "./discovery-filters.js";
+import { resolveSharedFilters, needsKariyerFilterOptions } from "./discovery-filters.js";
 import { callKariyerTool, KARIYER_TOOLS } from "../shared/kariyer/kariyer-tools.js";
 import { getKariyerCredentials, kariyerSessionReady } from "../shared/kariyer/kariyer-session.js";
 import { chatWithJob } from "../features/chat/chat-api.js";
@@ -12,7 +12,7 @@ import type { ChatStreamOptions } from "../features/chat/chat-api.js";
 import { accountScope, transactDashboard } from "./store.js";
 import { dashboardMessageSchema, analysisMessageSchema, discoveryJobSchema, discoverySchema, resumeViewSchema, statusLabels, DISCOVERY_PAGE_SIZE, emptyDiscovery } from "./models.js";
 import type { DashboardState, ResumeSummary, TrackedApplication, CvVariantSnapshot, ApplicationImportSummary } from "./models.js";
-import { object, string, kariyerUrl, dateTime, normalizeApplication, mergeApplication, projectSearch, projectResumeViews, cvContent, projectAppliedJobs, newTrackedApplication } from "./data.js";
+import { object, string, kariyerUrl, dateTime, normalizeApplication, mergeApplication, projectSearch, projectSearchOptions, projectResumeViews, cvContent, projectAppliedJobs, newTrackedApplication } from "./data.js";
 
 const CANDIDATE = "https://candidatewebapigw.kariyer.net", SEARCH = "https://candidatesearchapigateway.kariyer.net";
 export class DashboardError extends Error {
@@ -43,7 +43,8 @@ export async function resolveAccount(signal?: AbortSignal) {
       const identity = await callKariyerTool("get_candidate_base_info", {}, "", { bearer: tokens[SEARCH] }, fetch, signal, v => ({ id: object(v).id })); guard();
       if (!identity.ok || string(object(identity.data).id) !== candidateId) fail("AUTH_REQUIRED", "İlan araması oturumu aynı hesaba ait değil. Kariyer.net sayfasını yenileyin.");
     }
-    const result = await callKariyerTool(name, input, jobId, { bearer: tokens[endpoint.origin] }, fetch, signal, project); guard();
+    const result = await callKariyerTool(name, input, jobId, { bearer: tokens[endpoint.origin] }, fetch, signal, project,
+      name === "search_jobs" && (project === projectSearch || project === projectSearchOptions) ? { maxArrayLength: 200 } : undefined); guard();
     if (!result.ok) throw new DashboardError(result.code, result.message); return result;
   };
   const transaction = <T>(fn: (s: DashboardState) => T, save = true) => transactDashboard(scope, guard, fn, save);
@@ -253,8 +254,19 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
     };
     const results = await Promise.allSettled(selected.map(async provider => {
       const prefs = preferencesFor(provider), now = Date.now();
+      let choices = provider === "kariyer" ? old.discovery.options : old.iskurDiscovery.options;
+      if (provider === "kariyer" && needsKariyerFilterOptions(prefs, choices)) {
+        // Recover missing/old option catalogs once, then apply the requested filters.
+        const catalog = await account.call("search_jobs", { memberId: Number(account.candidateId), jobProperties: ["1"],
+          calculateHiddenJobCount: true, dontShowAppliedJobs: false, size: DISCOVERY_PAGE_SIZE, currentPage: 1,
+          url: "___kw=___opj=1" + (prefs.includeOlder ? "" : "___date=7g") + "___cp=1" }, "", projectSearchOptions);
+        if (catalog.truncated) fail("INVALID_RESPONSE", "Kariyer.net filtre seçenekleri eksik döndü; önceki sonuçlar korundu.");
+        choices = discoverySchema.shape.options.parse(object(catalog.data).options);
+        const refreshedChoices = choices;
+        await account.transaction(s => { s.discovery.options = refreshedChoices; });
+      }
       let filters: ReturnType<typeof resolveSharedFilters>;
-      try { filters = resolveSharedFilters(prefs, provider, provider === "kariyer" ? old.discovery.options : old.iskurDiscovery.options); }
+      try { filters = resolveSharedFilters(prefs, provider, choices); }
       catch (error) { fail("INVALID_ARGUMENTS", error instanceof Error ? error.message : "Ortak filtreler geçersiz."); }
       if (provider === "iskur") {
         const page = await searchIskur({ ...prefs, iskur: filters.iskur }, request.page, account.scope, signal); account.guard();
@@ -262,8 +274,8 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
           total: page.total, totalKnown: page.totalKnown, hasNext: page.hasNext, appliedPreferences: prefs,
           options: { cities: page.provinces, workModels: [] } }) };
       }
-      for (const [values, choices] of [[filters.cities, old.discovery.options.cities], [prefs.workModels, old.discovery.options.workModels]] as const)
-        if (values.some(id => !choices.some(o => o.id === id))) fail("INVALID_ARGUMENTS", "Filtre seçenekleri güncel değil. Önce filtresiz yenileyin.");
+      for (const [values, available] of [[filters.cities, choices.cities], [prefs.workModels, choices.workModels]] as const)
+        if (values.some(id => !available.some(o => o.id === id))) fail("INVALID_ARGUMENTS", "Filtre seçenekleri güncel değil. Önce filtresiz yenileyin.");
       const result = await account.call("search_jobs", { memberId: Number(account.candidateId), jobProperties: ["1"],
         calculateHiddenJobCount: true, dontShowAppliedJobs: false, size: DISCOVERY_PAGE_SIZE, currentPage: request.page,
         url: "___kw=" + prefs.keyword.replaceAll("___", " ") + "___opj=1" + (prefs.includeOlder ? "" : "___date=7g") + "___cp=" + request.page, ...(prefs.keyword ? { keyword: prefs.keyword } : {}),
