@@ -42,7 +42,7 @@ export function plainText(value: unknown): string {
 }
 
 export function buildContext(job: Partial<Job>) {
-  const fields: (keyof Job)[] = ["id", "title", "companyName", "location", "employmentType", "workModel", "position", "sector", "workAreas", "experience", "education", "languages", "publishedAt", "closingDate", "updateCount", "applicationReviewText", "applicationCount", "isActive"];
+  const fields: (keyof Job)[] = ["provider", "id", "title", "companyName", "location", "employmentType", "workModel", "position", "sector", "workAreas", "experience", "education", "languages", "publishedAt", "closingDate", "updateCount", "applicationReviewText", "applicationCount", "isActive"];
   const context = Object.fromEntries(fields.filter((key) => job[key] !== undefined).map((key) => [key, job[key]]));
   context.qualifications = plainText(job.qualifications).slice(0, 20000);
   return JSON.stringify(context);

@@ -1,12 +1,15 @@
 import { z } from "zod";
 import type { ChatSettings, Failure } from "../shared/types.js";
 import { getJob } from "../shared/kariyer/kariyer-api.js";
+import { getIskurJob, searchIskur, IskurError } from "../shared/iskur/iskur-api.js";
+import { jobKey, jobUrlFor } from "../shared/job-provider.js";
+import type { JobProvider } from "../shared/job-provider.js";
 import { callKariyerTool, KARIYER_TOOLS } from "../shared/kariyer/kariyer-tools.js";
 import { getKariyerCredentials, kariyerSessionReady } from "../shared/kariyer/kariyer-session.js";
 import { chatWithJob } from "../features/chat/chat-api.js";
 import type { ChatStreamOptions } from "../features/chat/chat-api.js";
 import { accountScope, transactDashboard } from "./store.js";
-import { dashboardMessageSchema, analysisMessageSchema, discoveryJobSchema, resumeViewSchema, statusLabels, DISCOVERY_PAGE_SIZE } from "./models.js";
+import { dashboardMessageSchema, analysisMessageSchema, discoveryJobSchema, discoverySchema, resumeViewSchema, statusLabels, DISCOVERY_PAGE_SIZE, emptyDiscovery } from "./models.js";
 import type { DashboardState, ResumeSummary, TrackedApplication, CvVariantSnapshot, ApplicationImportSummary } from "./models.js";
 import { object, string, kariyerUrl, dateTime, normalizeApplication, mergeApplication, projectSearch, projectResumeViews, cvContent, projectAppliedJobs, newTrackedApplication } from "./data.js";
 
@@ -16,8 +19,8 @@ export class DashboardError extends Error {
 }
 function fail(code: string, message: string): never { throw new DashboardError(code, message); }
 export function dashboardFailure(error: unknown): Failure {
-  return { ok: false, code: error instanceof DashboardError ? error.code : "DASHBOARD_ERROR",
-    message: error instanceof DashboardError ? error.message : error instanceof z.ZodError ? "Dashboard verisi geçersiz veya sürümü desteklenmiyor." : "Dashboard işlemi tamamlanamadı. Depolama alanını ve bağlantıyı kontrol edin." };
+  return { ok: false, code: error instanceof DashboardError || error instanceof IskurError ? error.code : "DASHBOARD_ERROR",
+    message: error instanceof DashboardError || error instanceof IskurError ? error.message : error instanceof z.ZodError ? "Dashboard verisi geçersiz veya sürümü desteklenmiyor." : "Dashboard işlemi tamamlanamadı. Depolama alanını ve bağlantıyı kontrol edin." };
 }
 export async function resolveAccount(signal?: AbortSignal) {
   await kariyerSessionReady();
@@ -78,7 +81,7 @@ const appliedJobPageSchema = z.object({ total: z.number().int().nonnegative(), p
 async function importApplications(account: Account, pageNumber: number, seenJobIds: string[]): Promise<ApplicationImportSummary> {
   const state = await readState(account);
   const seen = new Set(seenJobIds);
-  const existing = new Set(state.applications.map(a => a.jobId).filter(id => !seen.has(id)));
+  const existing = new Set(state.applications.filter(a => a.provider === "kariyer").map(a => a.jobId).filter(id => !seen.has(id)));
   const result = await account.call("search_jobs", { memberId: Number(account.candidateId), jobProperties: ["5"],
     isSearchFromProfilePage: true, dontShowAppliedJobs: false, currentPage: pageNumber, size: IMPORT_PAGE_SIZE }, "", projectAppliedJobs);
   const parsed = appliedJobPageSchema.safeParse(result.data);
@@ -121,7 +124,7 @@ async function importApplications(account: Account, pageNumber: number, seenJobI
   }
   await account.transaction(state => {
     for (const snapshot of snapshots) {
-      const index = state.applications.findIndex(a => a.jobId === snapshot.job.jobId);
+      const index = state.applications.findIndex(a => a.provider === "kariyer" && a.jobId === snapshot.job.jobId);
       if (index < 0 && state.applications.length >= 500) { summary.warning = "500 takip kaydı sınırına ulaşıldı. Yeni kayıtlar için listede yer açın."; continue; }
       const old = index < 0 ? newTrackedApplication({ jobId: snapshot.job.jobId, title: snapshot.job.title || "İlan başlığı bulunamadı",
         companyName: snapshot.job.companyName, jobUrl: snapshot.job.jobUrl }) : state.applications[index];
@@ -157,19 +160,21 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
     notice = "A/B testleri sıfırlandı. Başvuruların korundu.";
   }
   if (request.action === "track") {
-    const job = await getJob(request.jobId); account.guard(); if (!job.ok) throw new DashboardError(job.code, job.message);
+    const provider = request.provider ?? "kariyer";
+    const job = await (provider === "iskur" ? getIskurJob(request.jobId, signal) : getJob(request.jobId, signal)); account.guard(); if (!job.ok) throw new DashboardError(job.code, job.message);
     if (job.data.id !== request.jobId) fail("INVALID_RESPONSE", "İlan kimliği eşleşmedi.");
     await account.transaction(s => {
-      if (s.applications.some(a => a.jobId === request.jobId)) { notice = "Bu ilan zaten takip listende."; return; }
+      if (s.applications.some(a => a.provider === provider && a.jobId === request.jobId)) { notice = "Bu ilan zaten takip listende."; return; }
+      if (s.applications.length >= 500) fail("STORAGE_FULL", "500 takip kaydı sınırına ulaşıldı. Yeni kayıtlar için listede yer açın.");
       const now = Date.now();
-      s.applications.unshift({ jobId: request.jobId, title: job.data.title.slice(0, 4000), companyName: string(job.data.companyName),
-        jobUrl: kariyerUrl(job.data.jobUrl) || "https://www.kariyer.net/is-ilani/ilan-" + request.jobId,
+      s.applications.unshift({ provider, jobId: request.jobId, title: job.data.title.slice(0, 4000), companyName: string(job.data.companyName),
+        jobUrl: provider === "iskur" ? jobUrlFor(provider, request.jobId) : kariyerUrl(job.data.jobUrl) || jobUrlFor(provider, request.jobId),
         createdAt: now, status: "saved", statusManual: false, appliedAt: "", notes: "", followUpAt: "", variantId: "", responded: false, interviewed: false, offered: false,
         manualEvents: [], api: { applied: null, appliedAt: "", cvId: "", cvName: "", events: [], fetchedAt: null, error: "" } });
     });
   }
   if (request.action === "update") await account.transaction(s => {
-    const app = s.applications.find(a => a.jobId === request.jobId); if (!app) fail("NOT_FOUND", "Takip kaydı bulunamadı.");
+    const app = s.applications.find(a => a.provider === (request.provider ?? "kariyer") && a.jobId === request.jobId); if (!app) fail("NOT_FOUND", "Takip kaydı bulunamadı.");
     const patch = request.patch;
     if (patch.variantId && !s.experiments.some(e => e.variants.some(v => v.id === patch.variantId))) fail("INVALID_ARGUMENTS", "CV sürümü bulunamadı.");
     if ([patch.appliedAt, patch.followUpAt].some(v => v && dateTime(v) === null)) fail("INVALID_ARGUMENTS", "Tarih geçersiz.");
@@ -183,7 +188,7 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
     if (changedStatus && app.manualEvents.length >= 100) app.manualEvents.shift();
     if (changedStatus) app.manualEvents.push({ id: crypto.randomUUID(), text: "Süreç: " + statusLabels[patch.status], at: new Date().toISOString(), viewed: false, source: "manual" });
   });
-  if (request.action === "remove") await account.transaction(s => { s.applications = s.applications.filter(a => a.jobId !== request.jobId); });
+  if (request.action === "remove") await account.transaction(s => { s.applications = s.applications.filter(a => a.provider !== (request.provider ?? "kariyer") || a.jobId !== request.jobId); });
   if (request.action === "createExperiment") {
     if (request.resumeA === request.resumeB) fail("INVALID_ARGUMENTS", "A ve B için iki farklı CV seçin.");
     const list = await resumes(account), a = list.find(r => r.id === request.resumeA), b = list.find(r => r.id === request.resumeB);
@@ -213,7 +218,7 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
       if (["AUTH_REQUIRED", "ACCESS_DENIED", "RATE_LIMITED"].includes(failure.code))
         return { ok: true as const, data: await readState(account), notice: failure.message, scope: account.scope };
     }
-    for (const app of state.applications) {
+    for (const app of state.applications.filter(a => a.provider === "kariyer")) {
       try {
         const status = await account.call("get_current_job_apply_status", {}, app.jobId, v => ({ isCandidateAppliedJob: object(v).isCandidateAppliedJob }));
         const applied = object(status.data).isCandidateAppliedJob;
@@ -224,36 +229,62 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
         if (status.truncated || detail.truncated) fail("INVALID_RESPONSE", "Başvuru yanıtı eksik; önceki veriler korundu.");
         if (applied === true && string(object(object(detail.data).applicationDetail).jobId) !== app.jobId) fail("INVALID_RESPONSE", "Başvuru ilan kimliği eşleşmedi.");
         const api = normalizeApplication(status.data, detail.data, Date.now());
-        await account.transaction(s => { const index = s.applications.findIndex(a => a.jobId === app.jobId);
+        await account.transaction(s => { const index = s.applications.findIndex(a => a.provider === "kariyer" && a.jobId === app.jobId);
           if (index >= 0) s.applications[index] = mergeApplication(s.applications[index], api); });
       } catch (error) {
         account.guard(); errors++;
         const failure = dashboardFailure(error);
-        await account.transaction(s => { const current = s.applications.find(a => a.jobId === app.jobId); if (current) current.api.error = failure.message; });
+        await account.transaction(s => { const current = s.applications.find(a => a.provider === "kariyer" && a.jobId === app.jobId); if (current) current.api.error = failure.message; });
         if (["AUTH_REQUIRED", "ACCESS_DENIED", "RATE_LIMITED"].includes(failure.code)) { notice = failure.message; break; }
       }
     }
     if (!notice) notice = errors ? errors + " kayıt güncellenemedi; önceki verileri korundu." : "Başvuru bilgileri güncellendi.";
   }
   if (request.action === "search") {
-    const old = await readState(account), prefs = request.preferences;
-    for (const [values, choices] of [[prefs.cities, old.discovery.options.cities], [prefs.workModels, old.discovery.options.workModels]] as const)
-      if (values.some(id => !choices.some(o => o.id === id))) fail("INVALID_ARGUMENTS", "Filtre seçenekleri güncel değil. Önce filtresiz yenileyin.");
-    const result = await account.call("search_jobs", { memberId: Number(account.candidateId), jobProperties: ["1"],
-      calculateHiddenJobCount: true, dontShowAppliedJobs: false, size: DISCOVERY_PAGE_SIZE, currentPage: request.page,
-      url: "___kw=" + prefs.keyword.replaceAll("___", " ") + "___opj=1" + (prefs.includeOlder ? "" : "___date=7g") + "___cp=" + request.page, ...(prefs.keyword ? { keyword: prefs.keyword } : {}),
-      ...(prefs.cities.length ? { location: { cities: prefs.cities } } : {}), ...(prefs.workModels.length ? { workModels: prefs.workModels } : {}) }, "", projectSearch);
-    const data = object(result.data), now = Date.now();
-    if (result.truncated || !Array.isArray(data.items)) fail("INVALID_RESPONSE", "İlan araması eksik veya beklenen yapıda değil; önceki sonuçlar korundu.");
-    const jobs = data.items.map(v => discoveryJobSchema.parse({ ...object(v), firstSeenAt: now }));
+    const old = await readState(account);
+    if (request.provider && !request.preferences.providers.includes(request.provider)) fail("INVALID_ARGUMENTS", "Sayfalanan provider seçili değil.");
+    if (!request.provider && request.page !== 1) fail("INVALID_ARGUMENTS", "Sonraki sayfa için provider seçin.");
+    const selected: JobProvider[] = request.provider ? [request.provider] : request.preferences.providers;
+    const preferencesFor = (provider: JobProvider) => {
+      const source = provider === "kariyer" ? old.discovery : old.iskurDiscovery;
+      if (request.provider && request.page > 1 && !source.appliedPreferences) fail("INVALID_ARGUMENTS", "Önce aramayı yenileyin.");
+      return request.provider ? source.appliedPreferences ?? request.preferences : request.preferences;
+    };
+    const results = await Promise.allSettled(selected.map(async provider => {
+      const prefs = preferencesFor(provider), now = Date.now();
+      if (provider === "iskur") {
+        const page = await searchIskur(prefs, request.page, account.scope, signal); account.guard();
+        return { provider, prefs, page: discoverySchema.parse({ ...emptyDiscovery(), jobs: page.jobs, fetchedAt: now, currentPage: request.page,
+          total: page.total, totalKnown: page.totalKnown, hasNext: page.hasNext, appliedPreferences: prefs,
+          options: { cities: page.provinces, workModels: [] } }) };
+      }
+      for (const [values, choices] of [[prefs.cities, old.discovery.options.cities], [prefs.workModels, old.discovery.options.workModels]] as const)
+        if (values.some(id => !choices.some(o => o.id === id))) fail("INVALID_ARGUMENTS", "Filtre seçenekleri güncel değil. Önce filtresiz yenileyin.");
+      const result = await account.call("search_jobs", { memberId: Number(account.candidateId), jobProperties: ["1"],
+        calculateHiddenJobCount: true, dontShowAppliedJobs: false, size: DISCOVERY_PAGE_SIZE, currentPage: request.page,
+        url: "___kw=" + prefs.keyword.replaceAll("___", " ") + "___opj=1" + (prefs.includeOlder ? "" : "___date=7g") + "___cp=" + request.page, ...(prefs.keyword ? { keyword: prefs.keyword } : {}),
+        ...(prefs.cities.length ? { location: { cities: prefs.cities } } : {}), ...(prefs.workModels.length ? { workModels: prefs.workModels } : {}) }, "", projectSearch);
+      const data = object(result.data);
+      if (result.truncated || !Array.isArray(data.items)) fail("INVALID_RESPONSE", "İlan araması eksik veya beklenen yapıda değil; önceki sonuçlar korundu.");
+      const total = Math.max(0, Number(data.total) || 0);
+      return { provider, prefs, page: discoverySchema.parse({ ...emptyDiscovery(), jobs: data.items.map(v => discoveryJobSchema.parse({ ...object(v), provider, firstSeenAt: now })),
+        fetchedAt: now, currentPage: request.page, total, hasNext: request.page * DISCOVERY_PAGE_SIZE < total, appliedPreferences: prefs,
+        options: data.options as DashboardState["discovery"]["options"] }) };
+    }));
+    account.guard();
     await account.transaction(s => {
-      const seen = { ...s.discovery.seen }; for (const j of jobs) { j.firstSeenAt = seen[j.id] ?? now; seen[j.id] = j.firstSeenAt; }
-      const boundedSeen = Object.fromEntries(Object.entries(seen).sort((a, b) => b[1] - a[1]).slice(0, 2000));
-      s.preferences = prefs;
-      s.discovery = { jobs: [...new Map(jobs.map(j => [j.id, j])).values()], seen: boundedSeen, fetchedAt: now,
-        currentPage: request.page, total: Math.max(0, Number(data.total) || 0), options: data.options as DashboardState["discovery"]["options"] };
+      if (!request.provider) s.preferences = request.preferences;
+      results.forEach((result, index) => {
+        const key = selected[index] === "kariyer" ? "discovery" : "iskurDiscovery";
+        if (result.status === "rejected") { s[key].error = dashboardFailure(result.reason).message; return; }
+        const page = result.value.page, seen = { ...s[key].seen };
+        for (const j of page.jobs) { const id = jobKey(j); j.firstSeenAt = seen[id] ?? j.firstSeenAt; seen[id] = j.firstSeenAt; }
+        s[key] = { ...page, seen: Object.fromEntries(Object.entries(seen).sort((a, b) => b[1] - a[1]).slice(0, 2000)) };
+      });
     });
-    notice = (prefs.includeOlder ? "Tüm tarihlerdeki ilanlar güncellendi." : "Son 7 gün filtresiyle ilanlar güncellendi.") + " Her sayfada en fazla 50 ilan gösterilir; diğer sonuçlar için Sonraki düğmesini kullanın.";
+    const succeeded = results.filter(r => r.status === "fulfilled").length;
+    notice = succeeded ? (request.preferences.includeOlder ? "Tüm tarihlerdeki ilanlar güncellendi." : "Son 7 gün filtresiyle ilanlar güncellendi.") : "Arama güncellenemedi; önceki sonuçlar korundu.";
+    if (succeeded && succeeded < results.length) notice += " Bazı kaynaklar güncellenemedi; ayrıntılar ilgili sonuç bölümünde.";
   }
   account.guard(); return { ok: true as const, data: await readState(account), notice, scope: account.scope, ...(importSummary ? { importSummary } : {}) };
 }
@@ -270,7 +301,7 @@ export async function analyzeDashboard(input: unknown, streaming: ChatStreamOpti
     const resume = (await resumes(account)).find(r => r.id === request.resumeId);
     if (!resume) fail("NOT_FOUND", "Seçili CV hesapta bulunamadı."); variants = [await snapshot(account, resume, "A")];
   }
-  const result = await getJob(request.jobId, streaming.signal); account.guard();
+  const result = await (request.provider === "iskur" ? getIskurJob(request.jobId, streaming.signal) : getJob(request.jobId, streaming.signal)); account.guard();
   if (!result.ok) return result;
   if (result.data.id !== request.jobId) fail("INVALID_RESPONSE", "İlan kimliği eşleşmedi.");
   const { chatSettings } = await chrome.storage.local.get<{ chatSettings?: ChatSettings }>("chatSettings"); account.guard();

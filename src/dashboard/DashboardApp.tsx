@@ -17,7 +17,7 @@ export function DashboardApp() {
   const stats = [
     { label: "Takip edilen ilan", value: apps.length, icon: BriefcaseBusiness, tone: "purple" },
     { label: "Başvuru", value: apps.filter(a => a.status !== "saved" || a.api.applied).length, icon: ArrowUpRight, tone: "blue" },
-    { label: "CV görüntülenen", value: apps.filter(a => [...a.api.events, ...a.manualEvents].some(e => e.viewed) || state?.resumeViews.records.some(v => v.resumeId === a.api.cvId && v.jobId === a.jobId && v.viewCount > 0)).length, icon: Eye, tone: "orange" },
+    { label: "CV görüntülenen", value: apps.filter(a => [...a.api.events, ...a.manualEvents].some(e => e.viewed) || (a.provider === "kariyer" && state?.resumeViews.records.some(v => v.resumeId === a.api.cvId && v.jobId === a.jobId && v.viewCount > 0))).length, icon: Eye, tone: "orange" },
     { label: "Mülakat", value: apps.filter(a => a.interviewed).length, icon: Sparkles, tone: "green" },
   ];
   return <div className="dashboard-shell">

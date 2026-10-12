@@ -160,10 +160,13 @@ test("manual discovery distinguishes publication from first sighting and keeps p
   const firstSeen = state.discovery.jobs[0].firstSeenAt;
   state = (await invoke({ action: "search", preferences: { ...preferences, cities: ["34"], workModels: ["2"] }, page: 1 })).data;
   assert.equal(state.discovery.jobs[0].firstSeenAt, firstSeen);
-  await assert.rejects(invoke({ action: "search", preferences: { ...preferences, cities: ["invented"] }, page: 1 }), /Filtre/);
+  const invalidFilter = await invoke({ action: "search", preferences: { ...preferences, cities: ["invented"] }, page: 1 });
+  assert.match(invalidFilter.data.discovery.error, /Filtre/);
   apiMode = "search-invalid";
-  await assert.rejects(invoke({ action: "search", preferences, page: 1 }), /önceki sonuçlar/);
-  assert.deepEqual((await invoke({ action: "get" })).data.discovery, state.discovery); apiMode = "ok";
+  const failed = await invoke({ action: "search", preferences, page: 1 });
+  assert.match(failed.data.discovery.error, /önceki sonuçlar/);
+  assert.deepEqual(failed.data.discovery.jobs, state.discovery.jobs);
+  assert.equal(failed.data.discovery.fetchedAt, state.discovery.fetchedAt); apiMode = "ok";
 });
 test("session switches and cancelled requests never expose the prior account", async () => {
   changeDuringBase = true;
@@ -347,7 +350,7 @@ test("discovery sends the observed URL filter and returns later pages without cu
     const preferences = { ...emptyDashboard().preferences, keyword: "yazılım" };
     const first = await invoke({ action: "search", preferences, page: 1 });
     assert.equal(first.data.discovery.jobs.length, 50); assert.equal(first.data.discovery.total, 174);
-    const second = await invoke({ action: "search", preferences, page: 2 });
+    const second = await invoke({ action: "search", provider: "kariyer", preferences, page: 2 });
     assert.equal(second.data.discovery.currentPage, 2); assert.equal(second.data.discovery.jobs.length, 50);
     assert.equal(second.data.discovery.jobs[0].id, "2000");
     assert.ok(second.data.discovery.jobs.every(j => !first.data.discovery.jobs.some(old => old.id === j.id)));
@@ -360,7 +363,7 @@ test("including older jobs removes the API date restriction and stays selected o
     const preferences = { ...emptyDashboard().preferences, keyword: "yazılım", includeOlder: true };
     const first = await invoke({ action: "search", preferences, page: 1 });
     assert.equal(first.data.preferences.includeOlder, true); assert.match(first.notice, /Tüm tarihler/);
-    const second = await invoke({ action: "search", preferences: first.data.preferences, page: 2 });
+    const second = await invoke({ action: "search", provider: "kariyer", preferences: first.data.preferences, page: 2 });
     assert.equal(second.data.preferences.includeOlder, true); assert.equal(second.data.discovery.currentPage, 2);
   } finally { apiMode = "ok"; }
 });

@@ -15,7 +15,7 @@ export function useDashboardAnalysis({ verifiedScope, onError: setError, onAuthF
   }
   useEffect(() => () => { activeGeneration.current++; analysisPort.current?.disconnect(); }, []);
   function cancelAnalysis() { activeGeneration.current++; analysisPort.current?.disconnect(); analysisPort.current = null; setAnalysis(a => ({ ...a, pending: false, status: "Analiz durduruldu." })); }
-  function analyze(jobId: string, choice: { experimentId?: string; resumeId?: string }, title: string) {
+  function analyze(jobId: string, choice: { experimentId?: string; resumeId?: string; provider?: import("../../shared/job-provider.js").JobProvider }, title: string) {
     cancelAnalysis(); const generation = ++activeGeneration.current; setError(null);
     setAnalysis({ title, content: "", pending: true, status: "İlan ve CV bilgileri alınıyor…" });
     let done = false;

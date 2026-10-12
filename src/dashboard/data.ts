@@ -1,5 +1,7 @@
 import { DISCOVERY_PAGE_SIZE, resumeViewSchema } from "./models.js";
 import type { CvVariantSnapshot, DiscoveryJob, TrackedApplication, ResumeView } from "./models.js";
+import { jobUrlFor } from "../shared/job-provider.js";
+import type { JobProvider } from "../shared/job-provider.js";
 
 export const object = (v: unknown): Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
 export const string = (v: unknown, max = 4000): string => typeof v === "string" || typeof v === "number" ? String(v).trim().slice(0, max) : "";
@@ -91,7 +93,7 @@ export function experimentMetrics(apps: TrackedApplication[], variantId: string,
   const cvViews = views.filter(v => v.resumeId === resumeId && (start === null || (dateTime(v.viewedAt) ?? -Infinity) >= start)
     && (end === null || (dateTime(v.viewedAt) ?? Infinity) < end + 86400000));
   return { applications: n, viewed: count(a => [...a.api.events, ...a.manualEvents].some(e => e.viewed)
-      || cvViews.some(v => v.jobId === a.jobId && v.resumeId === a.api.cvId && v.viewCount > 0)),
+      || (a.provider === "kariyer" && cvViews.some(v => v.jobId === a.jobId && v.resumeId === a.api.cvId && v.viewCount > 0))),
     totalViews: cvViews.reduce((sum, v) => sum + v.viewCount, 0),
     responded: count(a => a.responded), interviewed: count(a => a.interviewed), offered: count(a => a.offered) };
 }
@@ -137,8 +139,8 @@ export function projectAppliedJobs(value: unknown): unknown {
         jobUrl: kariyerUrl(job.jobUrl), sponsored: job.isSponsored === true || job.isRealSponsored === true };
     }) : null };
 }
-export function newTrackedApplication(job: { jobId: string; title: string; companyName: string; jobUrl: string }, now = Date.now()): TrackedApplication {
-  return { ...job, jobUrl: job.jobUrl || "https://www.kariyer.net/is-ilani/ilan-" + job.jobId, createdAt: now,
+export function newTrackedApplication(job: { provider?: JobProvider; jobId: string; title: string; companyName: string; jobUrl: string }, now = Date.now()): TrackedApplication {
+  return { ...job, provider: job.provider ?? "kariyer", jobUrl: job.jobUrl || jobUrlFor(job.provider ?? "kariyer", job.jobId), createdAt: now,
     status: "saved", statusManual: false, appliedAt: "", notes: "", followUpAt: "", variantId: "", responded: false, interviewed: false, offered: false,
     manualEvents: [], api: { applied: null, appliedAt: "", cvId: "", cvName: "", events: [], fetchedAt: null, error: "" } };
 }

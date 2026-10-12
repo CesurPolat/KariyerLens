@@ -1,8 +1,21 @@
 # İŞKUR API gözlem notları
 
-Bu doküman, kullanıcının paylaştığı ağ istekleri ve yanıtlarından hazırlanır; İŞKUR'un resmî API dokümantasyonu değildir. Aşağıdaki istek canlı olarak yeniden çalıştırılmadı. KariyerLens entegrasyonu henüz eklenmedi.
+Bu doküman, kullanıcının paylaştığı ağ istekleri ve yanıtları ile aşağıdaki canlı doğrulamadan hazırlanır; İŞKUR'un resmî API dokümantasyonu değildir. Önceki bölümlerdeki “canlı istek yapılmadı” notları ilgili tarihli örnekleri anlatır.
 
 İlgili ekran: https://esube.iskur.gov.tr/Istihdam/AcikIsIlanAra.aspx
+
+## KariyerLens entegrasyonu ve canlı doğrulama — 12 Ekim 2026
+
+- Misafir oturumunda ilk form GET, arama POST ve ikinci sayfa POST istekleri HTTP 200 döndürdü. Güncel gizli form alanları ve aynı oturum çerezleri kullanıldı. Gerçek durum alanları ve çerezler bu dokümana veya test fixture'larına alınmadı.
+- Özel sektör / son bir hafta araması sayfa başına 15 ilan döndürdü. O andaki toplam 7277 kayıttı; bu sayı sabit değildir.
+- Sonuç tablosu `ctl04_ctlGridAcikIslerListeDetail`. Başlık bağlantısının `onclick` alanı `PopupJobDetails('{jobId}','Özel','0')` biçimindeydi. Satır numaraları sabitlenmeden `ctlIsverenDL`, `ctlCalismaYeriDL`, `ctlCalismaSekliDL` son ekleri okunur.
+- Misafir erişiminde şirket alanı giriş yapmayı isteyen metin içeriyor; bu metin şirket adı sayılmıyor. Listede son başvuru tarihi var, yayın tarihi yok. Son başvuru tarihi yayın tarihi yerine kullanılmıyor.
+- Pager'ın `ctl04_ctlDataPagerDetay` span'ı boş; gerçek kontroller onun kardeşleridir. Sonraki hedefi `ctl04$ctlDataPagerDetay$btnNext`, doğrudan sayfa seçme hedefi `ctl04$ctlDataPagerDetay$btnChangeCurrentPage`. Sayfa numarası `ctl04$ctlDataPagerDetay$txtCurrentPage` alanıyla gönderilir. Dönen sayfa numarası doğrulanır. `Toplam Kayıt: …` metni toplamı verir.
+- Misafir ilan detayı HTTP 200 döndürdü. Meslek ve iş tanımı görünürken şirket, tarihler ve bazı diğer alanlar yoktu. Bu yanıtın form kimliği `formTemp`; action içindeki `uiID` ilan kimliğini doğruluyor. Kısmi detay analiz ve takip için kullanılabilir; eksik alanlar uydurulmaz.
+- Entegrasyon `src/shared/iskur/iskur-api.ts` içindedir. İstekler background worker'dan yapılır; parse5 HTML'yi script çalıştırmadan ayrıştırır. WebForms durumları yalnız bellekte tutulur, hesap ve filtreye göre ayrılır.
+- Job Search, iki kaynağı ayrı filtreler, sonuçlar, hatalar ve sayfalama ile gösterir. Dashboard şeması v2 eski kayıtları Kariyer.net olarak dönüştürür. İŞKUR başvuru durumları manuel takip edilir; Kariyer.net başvuru API'leri bu kayıtlar için çağrılmaz.
+
+Ek canlı smoke testinde doğrudan sayfa seçme hedefiyle ikinci sayfa, ilk sayfaya dönüş, misafir ilan detayı ve kamu araması doğrulandı. İstanbul / kısmi zamanlı / “yazılım” araması tanınan boş sonuç döndürdü. Başsız Chrome arayüz testinde kontrollü ağ fixture'larıyla checkbox seçimi, bağımsız sayfalama, takip ve CV analizi doğrulandı. Gerçek uzantıda oturumlu erişim ayrıca kontrol edilmelidir; aşağıdaki eski örnekler bütün sunucu davranışını belgelemez.
 
 ## İlçe seçenekleri — AjaxPro parametre listesi
 

@@ -7,4 +7,4 @@ export type AutoConnectEvent =
   | { type: "connected"; result: Extract<DashboardReply, { ok: true }> }
   | { type: "done"; result: Failure | { ok: true }; notice?: string };
 export type Act = (request: DashboardRequest) => Promise<DashboardReply>;
-export type Analyze = (jobId: string, choice: { experimentId?: string; resumeId?: string }, title: string) => void;
+export type Analyze = (jobId: string, choice: { experimentId?: string; resumeId?: string; provider?: import("../shared/job-provider.js").JobProvider }, title: string) => void;

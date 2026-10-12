@@ -16,6 +16,7 @@ export interface ChatMessage {
 }
 
 export interface Job {
+  provider?: import("./job-provider.js").JobProvider;
   id: string;
   title: string;
   jobUrl?: string;
@@ -40,7 +41,7 @@ export interface Job {
   experience?: string;
   education: string[];
   languages: string[];
-  isActive: boolean;
+  isActive?: boolean;
   isEasyApply: boolean;
 }
 
