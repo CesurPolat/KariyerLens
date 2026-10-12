@@ -1,4 +1,5 @@
 import { handleDashboard, analyzeDashboard, dashboardFailure } from "../dashboard/service.js";
+import { ISKUR_LOGIN_URL, resetIskurSessionForms } from "../shared/iskur/iskur-api.js";
 import { attachDashboardAutoConnect } from "./dashboard-auto-connect.js";
 import { jobIdFromUrl } from "../dashboard/data.js";
 import { clearMemory, getMemoryJob, getMemoryStatus, hashMemorySession, listMemoryJobs, memoryJobContext, memoryRevision, rememberJob, setMemoryEnabled, withResumeMemory } from "../features/memory/chat-memory.js";
@@ -164,6 +165,18 @@ export async function openDashboard() {
 }
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return;
+  if (message?.type === MESSAGE_TYPES.OPEN_ISKUR_LOGIN) {
+    if (!isDashboardSender(sender)) { sendResponse({ ok: false, code: "UNAUTHORIZED", message: "İŞKUR bağlantı erişimi yetkisiz." }); return; }
+    resetIskurSessionForms();
+    (async () => {
+      const existing = (await chrome.tabs.query({ url: ISKUR_LOGIN_URL })).find(tab => tab.url === ISKUR_LOGIN_URL && tab.id !== undefined);
+      if (existing?.id !== undefined) {
+        await chrome.tabs.update(existing.id, { active: true });
+        if (existing.windowId !== undefined) await chrome.windows.update(existing.windowId, { focused: true });
+      } else await chrome.tabs.create({ url: ISKUR_LOGIN_URL, active: true });
+    })().then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false, code: "ISKUR_LOGIN_OPEN_FAILED", message: "İŞKUR giriş sayfası açılamadı. Yeniden deneyin." }));
+    return true;
+  }
   if (message?.type === MESSAGE_TYPES.DASHBOARD || message?.type === MESSAGE_TYPES.TRACK_JOB || message?.type === MESSAGE_TYPES.OPEN_DASHBOARD) {
     const fromDashboard = isDashboardSender(sender);
     const fromJob = Boolean(sender.tab && jobIdFromUrl(sender.url ?? ""));

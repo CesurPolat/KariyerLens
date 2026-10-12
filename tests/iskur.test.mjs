@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { initialPage, searchPage, detailPage } from "./fixtures/iskur-pages.mjs";
-import { readIskurForm, iskurSearchBody, parseIskurSearch, parseIskurJob, iskurDate, searchIskur, getIskurJob } from "../src/shared/iskur/iskur-api.ts";
+import { readIskurForm, iskurSearchBody, parseIskurSearch, parseIskurJob, iskurDate, searchIskur, getIskurJob, resetIskurSessionForms } from "../src/shared/iskur/iskur-api.ts";
 import { emptyDashboard, dashboardSchema, dashboardMessageSchema } from "../src/dashboard/models.ts";
 import { jobKey, jobReferenceFromUrl } from "../src/shared/job-provider.ts";
 import { newTrackedApplication } from "../src/dashboard/data.ts";
@@ -131,4 +131,20 @@ test("all İŞKUR requests are POST; fresh forms serve refresh, changed filters,
   assert.equal(new URLSearchParams(requests.at(-1).options.body).get("__VIEWSTATE"), "page-3&+=");
   assert.equal((await getIskurJob("00000000123", undefined, fetcher)).ok, true);
   assert.equal(requests.length, 8); assert.equal(requests.at(-1).options.body, "__LASTFOCUS=");
+});
+
+test("opening login clears guest form state so the next search loads the current session's form", async () => {
+  let initialCalls = 0;
+  const fetcher = async (url, options) => {
+    const body = new URLSearchParams(options.body);
+    if (!body.has("__EVENTTARGET")) { initialCalls++; return html(initialPage); }
+    return html(searchPage());
+  };
+  const prefs = emptyDashboard().preferences;
+  await searchIskur(prefs, 1, "login-reset", undefined, fetcher);
+  await searchIskur(prefs, 1, "login-reset", undefined, fetcher);
+  assert.equal(initialCalls, 1);
+  resetIskurSessionForms();
+  await searchIskur(prefs, 1, "login-reset", undefined, fetcher);
+  assert.equal(initialCalls, 2);
 });

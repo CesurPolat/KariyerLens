@@ -60,6 +60,21 @@ test("toolbar opens a dashboard and reuses its existing tab", async () => {
  tabs = [{ id: 8, windowId: 2, url: dashboardUrl }]; onClick(); await until(() => activated);
  assert.deepEqual(activated, { id: 8, options: { active: true } }); assert.deepEqual(focused, { id: 2, options: { focused: true } });
 });
+
+test("İŞKUR login only opens the fixed official page from the dashboard and reuses its tab", async () => {
+ const url = "https://esube.iskur.gov.tr/Istihdam/AcikIsIlanAra.aspx";
+ const before = requests.length;
+ assert.equal((await dispatch({ type: "OPEN_ISKUR_LOGIN" }, jobSender)).code, "UNAUTHORIZED");
+ assert.equal((await dispatch({ type: "OPEN_ISKUR_LOGIN" }, { ...dashboardSender, url: "chrome-extension://" + extensionId + "/src/options/options.html" })).code, "UNAUTHORIZED");
+ tabs = [];
+ assert.equal((await dispatch({ type: "OPEN_ISKUR_LOGIN", url: "https://evil.test" })).ok, true);
+ assert.deepEqual(created, { url, active: true });
+ tabs = [{ id: 12, windowId: 4, url }];
+ assert.equal((await dispatch({ type: "OPEN_ISKUR_LOGIN" })).ok, true);
+ assert.deepEqual(activated, { id: 12, options: { active: true } });
+ assert.deepEqual(focused, { id: 4, options: { focused: true } });
+ assert.equal(requests.length, before, "opening login must not perform API searches or transmit credentials");
+});
 test("analysis ports reject content scripts and malformed input", async () => {
  assert.equal(port(jobSender).closed, true); assert.equal(port({ ...dashboardSender, id: "foreign" }).closed, true);
  const c = port(dashboardSender); c.send({ jobId: "bad", resumeId: "cv-A" }); await until(() => c.events.some(e => e.type === "done"));

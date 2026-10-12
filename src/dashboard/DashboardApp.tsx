@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUpRight, BriefcaseBusiness, ChevronRight, Eye, FlaskConical, LayoutDashboard, RefreshCw, Search, Settings, Sparkles } from "lucide-react";
+import { ArrowUpRight, BriefcaseBusiness, ChevronRight, Eye, FlaskConical, LayoutDashboard, LogIn, RefreshCw, Search, Settings, Sparkles } from "lucide-react";
 import type { DashboardPage } from "./ui-types.js";
 import { useDashboard } from "./hooks/useDashboard.js";
 import { Applications } from "./pages/Applications.js";
@@ -12,7 +12,7 @@ const connectionErrors = new Set(["AUTH_REQUIRED", "SESSION_NOT_CAPTURED", "CONN
 
 export function DashboardApp() {
   const [page, setPage] = useState<DashboardPage>("applications");
-  const { state, busy, loading, notice, error, cvList, act, reconnect, connecting, connectionStatus, autoConnectEnabled, toggleAutoConnect, openKariyer, cancelAutoConnect, analysis, cancelAnalysis, analyze, resetAnalysis } = useDashboard();
+  const { state, busy, loading, notice, error, cvList, act, reconnect, connecting, connectionStatus, autoConnectEnabled, toggleAutoConnect, openKariyer, openIskur, cancelAutoConnect, analysis, cancelAnalysis, analyze, resetAnalysis } = useDashboard();
   const apps = state?.applications ?? [];
   const stats = [
     { label: "Takip edilen ilan", value: apps.length, icon: BriefcaseBusiness, tone: "purple" },
@@ -23,11 +23,11 @@ export function DashboardApp() {
   return <div className="dashboard-shell">
     <aside className="sidebar"><a className="brand" href="#" onClick={e => { e.preventDefault(); setPage("applications"); }}><span className="brand-icon"><Search size={23} /></span><span>KariyerLens<small>KARİYER ÇALIŞMA ALANIN</small></span></a>
       <div className="nav-caption">ÇALIŞMA ALANI</div><nav aria-label="Ana gezinme">{([ ["applications", BriefcaseBusiness], ["experiments", FlaskConical], ["discovery", Sparkles] ] as const).map(([id, Icon]) => <button key={id} className={page === id ? "nav-item active" : "nav-item"} onClick={() => setPage(id)} aria-current={page === id ? "page" : undefined}><Icon size={19} />{labels[id]}{page === id && <ChevronRight size={16} />}</button>)}</nav>
-      <div className="sidebar-bottom"><div className="local-note"><span className="local-dot" /><div>Bu tarayıcıda saklanır<small>Başvuruların ve CV testlerin yerel.</small></div></div><button className="nav-item" onClick={() => { void chrome.runtime.openOptionsPage(); }}><Settings size={19} />Ayarlar</button><button className="nav-item" disabled={busy || loading} onClick={openKariyer}><ArrowUpRight size={19} />Kariyer.net’i aç</button><button className="nav-item" disabled={busy || loading} aria-pressed={autoConnectEnabled} onClick={() => { void toggleAutoConnect(); }}><RefreshCw size={19} />{autoConnectEnabled ? "Otomatik bağlantıyı kapat" : "Otomatik bağlan"}</button></div>
+      <div className="sidebar-bottom"><div className="local-note"><span className="local-dot" /><div>Bu tarayıcıda saklanır<small>Başvuruların ve CV testlerin yerel.</small></div></div><button className="nav-item" onClick={() => { void chrome.runtime.openOptionsPage(); }}><Settings size={19} />Ayarlar</button><button className="nav-item" disabled={busy || loading} onClick={openKariyer}><ArrowUpRight size={19} />Kariyer.net’i aç</button><button className="nav-item" disabled={busy} onClick={() => { void openIskur(); }}><LogIn size={19} />İŞKUR’a giriş yap</button><button className="nav-item" disabled={busy || loading} aria-pressed={autoConnectEnabled} onClick={() => { void toggleAutoConnect(); }}><RefreshCw size={19} />{autoConnectEnabled ? "Otomatik bağlantıyı kapat" : "Otomatik bağlan"}</button></div>
     </aside>
     <main><header className="topbar"><span><LayoutDashboard size={16} /> Dashboard <ChevronRight size={14} /> {labels[page]}</span><button className="quiet" disabled={busy} onClick={() => { reconnect(); }}><RefreshCw size={15} />Yeniden bağlan</button></header>
       <div className="main-content"><div className="page-heading"><div><span className="eyebrow">KARİYERİNİ BİR ADIM İLERİ TAŞI</span><h1>{labels[page]}</h1><p>{page === "applications" ? "Her başvurunun hikâyesini tek yerde takip et." : page === "experiments" ? "İki CV, gerçek başvurular ve daha bilinçli kararlar." : "Profiline göre önerilen işler arasından yeni fırsatları keşfet."}</p></div><span className="account-status"><span className="local-dot" />{state ? "Hesap doğrulandı" : "Bağlantı bekleniyor"}</span></div>
-      {error && <div className="alert error" role="alert">{error.message}{connectionErrors.has(error.code) && <span className="connection-actions"><button className="quiet" disabled={busy} onClick={openKariyer}>Kariyer.net’i aç <ArrowUpRight size={14} /></button><button className="quiet" disabled={busy} aria-pressed={autoConnectEnabled} onClick={() => { void toggleAutoConnect(); }}><RefreshCw size={14} />{autoConnectEnabled ? "Otomatik bağlantıyı kapat" : "Otomatik bağlan"}</button></span>}</div>}
+      {error && <div className="alert error" role="alert">{error.message}{error.code.startsWith("ISKUR_") && <button className="quiet" disabled={busy} onClick={() => { void openIskur(); }}><LogIn size={14} />İŞKUR’a giriş yap</button>}{connectionErrors.has(error.code) && <span className="connection-actions"><button className="quiet" disabled={busy} onClick={openKariyer}>Kariyer.net’i aç <ArrowUpRight size={14} /></button><button className="quiet" disabled={busy} aria-pressed={autoConnectEnabled} onClick={() => { void toggleAutoConnect(); }}><RefreshCw size={14} />{autoConnectEnabled ? "Otomatik bağlantıyı kapat" : "Otomatik bağlan"}</button></span>}</div>}
       {connecting && <div className="alert connection-status" role="status"><span><RefreshCw size={14} className="spin" />{connectionStatus}</span><button className="quiet" onClick={cancelAutoConnect}>İptal</button></div>}
       {notice && <div className="alert success" role="status">{notice}</div>}
       {loading && <div className="empty panel" role="status"><RefreshCw className="spin" /><h2>Hesabın doğrulanıyor</h2><p>Yerel kayıtların doğru hesabın altında açılacak.</p></div>}
@@ -35,7 +35,7 @@ export function DashboardApp() {
       {state && <><section className="stats" aria-label="Başvuru özeti">{stats.map(s => <div className="stat-card" key={s.label}><span className={"stat-icon " + s.tone}><s.icon size={20} /></span><strong>{s.value}</strong><span>{s.label}</span></div>)}</section>
         {page === "applications" && <Applications state={state} busy={busy} act={act} />}
         {page === "experiments" && <Experiments state={state} resumes={cvList} busy={busy} act={act} analyze={analyze} analysisPending={analysis.pending} />}
-        {page === "discovery" && <Discovery state={state} resumes={cvList} busy={busy} act={act} analyze={analyze} analysisPending={analysis.pending} />}
+        {page === "discovery" && <Discovery state={state} resumes={cvList} busy={busy} act={act} analyze={analyze} analysisPending={analysis.pending} openIskur={openIskur} />}
         <AnalysisPanel analysis={analysis} cancelAnalysis={cancelAnalysis} close={resetAnalysis} />
       </>}
       <footer>KariyerLens · Başvuruların için daha net bir bakış.</footer></div>

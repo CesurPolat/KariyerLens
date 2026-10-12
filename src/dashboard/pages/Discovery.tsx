@@ -1,5 +1,5 @@
 ﻿import { useState } from "react";
-import { ArrowUpRight, ListFilter, Plus, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowUpRight, ListFilter, LogIn, Plus, RefreshCw, Sparkles } from "lucide-react";
 import type { DashboardState, ResumeSummary, JobDiscoveryPreferences } from "../models.js";
 import type { Act, Analyze } from "../ui-types.js";
 import { dateTime, isNewJob } from "../data.js";
@@ -8,8 +8,8 @@ import { initialSharedFilters, sharedProvinceOptions, employmentKey } from "../d
 import { jobKey, jobProviders, jobUrlFor, providerLabels } from "../../shared/job-provider.js";
 import type { JobProvider } from "../../shared/job-provider.js";
 
-interface Props { state: DashboardState; resumes: ResumeSummary[]; busy: boolean; act: Act; analyze: Analyze; analysisPending: boolean }
-export function Discovery({ state, resumes, busy, act, analyze, analysisPending }: Props) {
+interface Props { state: DashboardState; resumes: ResumeSummary[]; busy: boolean; act: Act; analyze: Analyze; analysisPending: boolean; openIskur: () => Promise<void> }
+export function Discovery({ state, resumes, busy, act, analyze, analysisPending, openIskur }: Props) {
   const [prefs, setPrefs] = useState<JobDiscoveryPreferences>(() => ({ ...state.preferences, filters: initialSharedFilters(state.preferences, state.discovery.options, state.iskurDiscovery.options) }));
   const common = prefs.filters!;
   const provinces = sharedProvinceOptions(state.discovery.options, state.iskurDiscovery.options, prefs.providers);
@@ -29,14 +29,15 @@ export function Discovery({ state, resumes, busy, act, analyze, analysisPending 
         <label className="checkbox-label"><input type="checkbox" checked={prefs.includeOlder} onChange={e => setPrefs({ ...prefs, includeOlder: e.target.checked })} />Daha eski ilanları da göster</label><p className="muted">Seçildiğinde 7 günlük sınır kaldırılır. Filtreleri uygulamak için Yenile’ye bas.</p>
       </fieldset>
     </form>
+    {prefs.providers.includes("iskur") && <section className="iskur-login" aria-label="İŞKUR girişi"><div><h3>İŞKUR hesabıyla devam et</h3><p>Açılan resmi sayfada İş Arayan Girişi’ni seçip aynı tarayıcıda giriş yap. Sonra buraya dönerek Yenile’ye bas; ilanlar ve analizler açık oturumunu kullanır.</p></div><button className="secondary" disabled={busy} onClick={() => { void openIskur(); }}><LogIn size={16} />İŞKUR’a giriş yap</button></section>}
     {!state.discovery.fetchedAt && !state.iskurDiscovery.fetchedAt && <p className="hint">İlk yenilemede kaynakların konum seçenekleri yüklenir. Arama yalnız sen yenilediğinde çalışır.</p>}
     <div className="cv-choice"><label>Uyum analizinde kullanılacak CV<select value={prefs.resumeId} onChange={e => setPrefs({ ...prefs, resumeId: e.target.value })}><option value="">CV seç</option>{resumes.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label><button className="secondary" disabled={busy} onClick={() => { void act({ action: "resumes" }); }}>CV’leri getir</button><p>Analiz et’e bastığında CV ve ilan seçtiğin AI sağlayıcısına gönderilir.</p></div>
   </section>
-  {state.preferences.providers.map(provider => <ProviderResults key={provider} provider={provider} state={state} busy={busy} act={act} analyze={analyze} analysisPending={analysisPending} resumeId={prefs.resumeId} />)}
+  {state.preferences.providers.map(provider => <ProviderResults key={provider} provider={provider} state={state} busy={busy} act={act} analyze={analyze} analysisPending={analysisPending} resumeId={prefs.resumeId} openIskur={openIskur} />)}
   </>;
 }
 
-function ProviderResults({ provider, state, busy, act, analyze, analysisPending, resumeId }: Omit<Props, "resumes"> & { provider: JobProvider; resumeId: string }) {
+function ProviderResults({ provider, state, busy, act, analyze, analysisPending, resumeId, openIskur }: Omit<Props, "resumes"> & { provider: JobProvider; resumeId: string }) {
   const [category, setCategory] = useState("all");
   const source = provider === "kariyer" ? state.discovery : state.iskurDiscovery;
   const categoryOf = (job: typeof source.jobs[number]) => isNewJob(job) ? "new" : dateTime(job.publishedAt) === null ? "unknown" : "older";
@@ -45,7 +46,7 @@ function ProviderResults({ provider, state, busy, act, analyze, analysisPending,
   const paginate = (page: number) => { void act({ action: "search", provider, preferences: source.appliedPreferences ?? state.preferences, page }); };
   return <section className="panel discovery-results" aria-label={providerLabels[provider] + " sonuçları"}>
     <div className="section-heading"><div><h2>{providerLabels[provider]} ilanları <span className="count-badge">{source.jobs.length}</span></h2><p>{source.appliedPreferences?.includeOlder ? "Tüm tarihler" : "Son 7 gün arama filtresi"} · Son yenileme: {dateLabel(source.fetchedAt)}</p></div><label className="select-field"><ListFilter size={16} /><select aria-label={providerLabels[provider] + " yayın tarihi filtresi"} value={category} onChange={e => setCategory(e.target.value)}><option value="all">Tüm ilanlar</option><option value="new">Son 7 günde yayımlananlar</option><option value="unknown">Yayın tarihi bilinmeyenler</option><option value="older">Diğer ilanlar</option></select></label></div>
-    {source.error && <div className="alert error" role="alert">{source.error} {source.fetchedAt ? "Önceki sonuçlar gösteriliyor." : ""}{provider === "iskur" && <a href="https://esube.iskur.gov.tr/Istihdam/AcikIsIlanAra.aspx" target="_blank" rel="noopener noreferrer"> İŞKUR’u aç <ArrowUpRight size={13} /></a>}</div>}
+    {source.error && <div className="alert error" role="alert">{source.error} {source.fetchedAt ? "Önceki sonuçlar gösteriliyor." : ""}{provider === "iskur" && <button className="quiet" disabled={busy} onClick={() => { void openIskur(); }}><LogIn size={13} />İŞKUR’a giriş yap</button>}</div>}
     {provider === "iskur" && <p className="hint">İŞKUR misafir erişiminde şirket adı ve bazı detaylar gizli olabilir. Yayın tarihi doğrulanamayan ilanlar “Tarih bilinmiyor” olarak gösterilir. Başvuru süreci manuel takip edilir.</p>}
     {!source.jobs.length ? <div className="empty"><Sparkles size={30} /><h3>{source.fetchedAt ? "Bu filtrelerle ilan bulunamadı" : "İlanları getirmek için Yenile’ye bas"}</h3></div> : <>
       <div className="table-wrap"><table className="application-table discovery-table"><thead><tr><th>Pozisyon / Şirket</th><th>Konum</th><th>{provider === "iskur" ? "Çalışma şekli" : "Çalışma modeli"}</th><th>Yayın tarihi</th><th>İlk görüldü</th><th>İşlemler</th></tr></thead><tbody>{visible.map(j => {

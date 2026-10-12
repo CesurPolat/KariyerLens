@@ -73,7 +73,7 @@ export type ChatStreamEvent = ChatProgress | { type: "done"; result: ChatResult 
 export interface ExtensionMessage {
   payload?: unknown;
   scope?: unknown;
-  type: "DASHBOARD" | "TRACK_JOB" | "OPEN_DASHBOARD" | "GET_JOB_VISIT" | "GET_JOB" | "CHAT_JOB" | "OPEN_OPTIONS" | "GET_MEMORY_STATUS" | "SET_MEMORY_ENABLED" | "CLEAR_MEMORY" | "REFRESH_CV_MEMORY" | "GET_CHAT_SIZE" | "SET_CHAT_SIZE";
+  type: "DASHBOARD" | "TRACK_JOB" | "OPEN_DASHBOARD" | "OPEN_ISKUR_LOGIN" | "GET_JOB_VISIT" | "GET_JOB" | "CHAT_JOB" | "OPEN_OPTIONS" | "GET_MEMORY_STATUS" | "SET_MEMORY_ENABLED" | "CLEAR_MEMORY" | "REFRESH_CV_MEMORY" | "GET_CHAT_SIZE" | "SET_CHAT_SIZE";
   jobId?: unknown;
   messages?: unknown;
   enabled?: unknown;

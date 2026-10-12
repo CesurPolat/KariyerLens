@@ -7,6 +7,7 @@ import type { JobDiscoveryPreferences, DiscoveryJob } from "../../dashboard/mode
 
 const ORIGIN = "https://esube.iskur.gov.tr";
 const SEARCH_URL = ORIGIN + "/Istihdam/AcikIsIlanAra.aspx";
+export const ISKUR_LOGIN_URL = SEARCH_URL;
 const SEARCH_TARGET = "ctl04$ctlAcikIsPageCommand$CommandItem_Search";
 type Node = DefaultTreeAdapterMap["node"];
 type Element = DefaultTreeAdapterMap["element"];
@@ -139,6 +140,7 @@ export function parseIskurSearch(html: string, page: number, now = Date.now()): 
 interface Session { html: string; page: number; touched: number; scope: string }
 // Hidden fields remain transient; each account/filter combination has its own form state.
 const sessions = new Map<string, Session>();
+export function resetIskurSessionForms(): void { sessions.clear(); }
 async function request(url: string, body = new URLSearchParams({ __LASTFOCUS: "" }), signal?: AbortSignal, fetcher: typeof fetch = fetch): Promise<string> {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 25_000);
   try {

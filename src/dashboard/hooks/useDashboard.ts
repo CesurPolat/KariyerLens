@@ -61,6 +61,18 @@ export function useDashboard() {
       if (mounted.current) setSavingPreference(false);
     }
   }
+  async function openIskur() {
+    if (mutationRunning.current) return;
+    setError(null);
+    try {
+      const result: { ok: boolean; code?: string; message?: string } = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.OPEN_ISKUR_LOGIN });
+      if (!mounted.current) return;
+      if (!result?.ok) setError({ ok: false, code: result?.code ?? "ISKUR_LOGIN_OPEN_FAILED", message: result?.message ?? "İŞKUR giriş sayfası açılamadı." });
+      else setNotice("İŞKUR sayfasında İş Arayan Girişi’ni seçip giriş yap. Ardından buraya dönerek Yenile’ye bas.");
+    } catch {
+      if (mounted.current) setError({ ok: false, code: "ISKUR_LOGIN_OPEN_FAILED", message: "İŞKUR giriş sayfası açılamadı. Uzantıyı yeniden yükleyip deneyin." });
+    }
+  }
   function openKariyer() {
     if (mutationRunning.current) return;
     automaticAttempted.current = true;
@@ -167,5 +179,5 @@ export function useDashboard() {
     return () => { active = false; mounted.current = false; if (autoConnection.current) stopAutoConnect(); };
   }, []);
   function reconnect() { if (mutationRunning.current || preferenceWriting.current) return; automaticPaused.current = false; automaticAttempted.current = false; resetAccount(); setLoading(true); void act({ action: "get" }); }
-  return { state, busy: busy || savingPreference, loading, notice, error, cvList, act, reconnect, connecting, connectionStatus, autoConnectEnabled, toggleAutoConnect, openKariyer, cancelAutoConnect, analysis, cancelAnalysis, analyze, resetAnalysis };
+  return { state, busy: busy || savingPreference, loading, notice, error, cvList, act, reconnect, connecting, connectionStatus, autoConnectEnabled, toggleAutoConnect, openKariyer, openIskur, cancelAutoConnect, analysis, cancelAnalysis, analyze, resetAnalysis };
 }
