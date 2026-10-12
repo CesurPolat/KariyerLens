@@ -4,6 +4,7 @@ import { getJob } from "../shared/kariyer/kariyer-api.js";
 import { getIskurJob, searchIskur, IskurError } from "../shared/iskur/iskur-api.js";
 import { jobKey, jobUrlFor } from "../shared/job-provider.js";
 import type { JobProvider } from "../shared/job-provider.js";
+import { resolveSharedFilters } from "./discovery-filters.js";
 import { callKariyerTool, KARIYER_TOOLS } from "../shared/kariyer/kariyer-tools.js";
 import { getKariyerCredentials, kariyerSessionReady } from "../shared/kariyer/kariyer-session.js";
 import { chatWithJob } from "../features/chat/chat-api.js";
@@ -252,18 +253,21 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
     };
     const results = await Promise.allSettled(selected.map(async provider => {
       const prefs = preferencesFor(provider), now = Date.now();
+      let filters: ReturnType<typeof resolveSharedFilters>;
+      try { filters = resolveSharedFilters(prefs, provider, provider === "kariyer" ? old.discovery.options : old.iskurDiscovery.options); }
+      catch (error) { fail("INVALID_ARGUMENTS", error instanceof Error ? error.message : "Ortak filtreler geçersiz."); }
       if (provider === "iskur") {
-        const page = await searchIskur(prefs, request.page, account.scope, signal); account.guard();
+        const page = await searchIskur({ ...prefs, iskur: filters.iskur }, request.page, account.scope, signal); account.guard();
         return { provider, prefs, page: discoverySchema.parse({ ...emptyDiscovery(), jobs: page.jobs, fetchedAt: now, currentPage: request.page,
           total: page.total, totalKnown: page.totalKnown, hasNext: page.hasNext, appliedPreferences: prefs,
           options: { cities: page.provinces, workModels: [] } }) };
       }
-      for (const [values, choices] of [[prefs.cities, old.discovery.options.cities], [prefs.workModels, old.discovery.options.workModels]] as const)
+      for (const [values, choices] of [[filters.cities, old.discovery.options.cities], [prefs.workModels, old.discovery.options.workModels]] as const)
         if (values.some(id => !choices.some(o => o.id === id))) fail("INVALID_ARGUMENTS", "Filtre seçenekleri güncel değil. Önce filtresiz yenileyin.");
       const result = await account.call("search_jobs", { memberId: Number(account.candidateId), jobProperties: ["1"],
         calculateHiddenJobCount: true, dontShowAppliedJobs: false, size: DISCOVERY_PAGE_SIZE, currentPage: request.page,
         url: "___kw=" + prefs.keyword.replaceAll("___", " ") + "___opj=1" + (prefs.includeOlder ? "" : "___date=7g") + "___cp=" + request.page, ...(prefs.keyword ? { keyword: prefs.keyword } : {}),
-        ...(prefs.cities.length ? { location: { cities: prefs.cities } } : {}), ...(prefs.workModels.length ? { workModels: prefs.workModels } : {}) }, "", projectSearch);
+        ...(filters.cities.length ? { location: { cities: filters.cities } } : {}), ...(filters.workTypes.length ? { workTypes: filters.workTypes } : {}), ...(prefs.workModels.length ? { workModels: prefs.workModels } : {}) }, "", projectSearch);
       const data = object(result.data);
       if (result.truncated || !Array.isArray(data.items)) fail("INVALID_RESPONSE", "İlan araması eksik veya beklenen yapıda değil; önceki sonuçlar korundu.");
       const total = Math.max(0, Number(data.total) || 0);

@@ -32,6 +32,7 @@ test("form keeps decoded hidden values and only successful controls; filters use
   const body = iskurSearchBody(initialPage, prefs);
   assert.equal(body.get("__VIEWSTATE"), "initial&+=");
   assert.equal(new URLSearchParams(body.toString()).get("__VIEWSTATE"), "initial&+=");
+  assert.match(body.toString(), /^__EVENTTARGET=ctl04%24ctlAcikIsPageCommand%24CommandItem_Search&__EVENTARGUMENT=&__LASTFOCUS=&__VIEWSTATE=/);
   assert.equal(body.get("ctl04$ctlArananMetin2"), "İş & C++"); assert.equal(body.get("ctl04$ctlIl"), "48");
   assert.equal(body.get("ctl04$ctlCalismaSekli"), "2"); assert.equal(body.get("ctl04$IsyeriTuruRadios"), "kamuRadio");
   assert.equal(body.get("ctl04$ctlIlanTarihi"), "3"); assert.equal(body.get("checked"), "on");
@@ -52,9 +53,10 @@ test("observed rows parse popup identifiers and keep publication separate from c
 test("pagination reuses latest state, restores earlier pages, and isolates account sessions", async () => {
   const requests = [];
   const fetcher = async (url, options) => {
+    assert.equal(options.method, "POST"); assert.equal(options.redirect, "error");
     const body = options.body ? new URLSearchParams(options.body) : null; requests.push(body);
-    if (!body) return html(initialPage);
-    if (body.get("__EVENTTARGET").endsWith("CommandItem_Search")) { assert.equal(body.get("__VIEWSTATE"), "initial&+="); return html(searchPage()); }
+    if (!body?.has("__EVENTTARGET")) { assert.equal(options.body, "__LASTFOCUS="); return html(initialPage); }
+    if (body.get("__EVENTTARGET").endsWith("CommandItem_Search")) { assert.ok(["initial&+=", "page-2&+="].includes(body.get("__VIEWSTATE"))); return html(searchPage()); }
     assert.equal(body.get("__VIEWSTATE"), "page-1&+="); assert.equal(body.get("ctl04$ctlDataPagerDetay$txtCurrentPage"), "2");
     return html(searchPage(2, "00000000456", { next: false }));
   };
@@ -62,8 +64,8 @@ test("pagination reuses latest state, restores earlier pages, and isolates accou
   await searchIskur(prefs, 1, "account-a", undefined, fetcher);
   const second = await searchIskur(prefs, 2, "account-a", undefined, fetcher);
   assert.equal(second.jobs[0].id, "00000000456"); assert.equal(second.hasNext, false); assert.equal(requests.length, 3);
-  await searchIskur(prefs, 1, "account-a", undefined, fetcher); assert.equal(requests.length, 5);
-  await searchIskur(prefs, 2, "account-b", undefined, fetcher); assert.equal(requests.length, 8);
+  await searchIskur(prefs, 1, "account-a", undefined, fetcher); assert.equal(requests.length, 4);
+  await searchIskur(prefs, 2, "account-b", undefined, fetcher); assert.equal(requests.length, 7);
 });
 test("detail supports guest fields, checks identity and preserves paragraphs without executing script", () => {
   const job = parseIskurJob(detailPage(), "00000000123");
@@ -85,4 +87,48 @@ test("references retain leading zeroes and reject foreign hosts and credentials"
   assert.deepEqual(iskur, { provider: "iskur", jobId: "00000000123" });
   assert.notEqual(jobKey(iskur), jobKey({ provider: "kariyer", jobId: iskur.jobId }));
   for (const url of ["https://evil.test/Istihdam/AcikIsIlanDetay.aspx?uiID=123", "https://user:pass@esube.iskur.gov.tr/Istihdam/AcikIsIlanDetay.aspx?uiID=123", "http://esube.iskur.gov.tr/Istihdam/AcikIsIlanDetay.aspx?uiID=123"]) assert.equal(jobReferenceFromUrl(url), null);
+});
+
+test("İŞKUR rejection pages stop the request chain even with HTTP 200 and preserve the request id", async () => {
+  const blocked = "<html><p>Yapılmaya çalışılan istek reddedildi.</p><p>Istek ID'si: 13182690877907394133</p><a>[Go Back]</a></html>";
+  const prefs = emptyDashboard().preferences;
+  for (const status of [200, 403]) {
+    let calls = 0;
+    await assert.rejects(searchIskur(prefs, 1, "blocked-" + status, undefined, async () => {
+      calls++; return new Response(blocked, { status, headers: { "content-type": "text/html" } });
+    }), error => error.code === "ISKUR_REQUEST_REJECTED" && error.message.includes("13182690877907394133"));
+    assert.equal(calls, 1, "a rejected initial POST must not be followed by another POST");
+  }
+  let calls = 0;
+  await assert.rejects(searchIskur(prefs, 2, "blocked-post", undefined, async () => {
+    calls++; return html(calls === 1 ? initialPage : blocked);
+  }), error => error.code === "ISKUR_REQUEST_REJECTED");
+  assert.equal(calls, 2, "a rejected search POST must not be followed by paging or retry");
+  const detail = await getIskurJob("00000000123", undefined, async () => html(blocked));
+  assert.equal(detail.code, "ISKUR_REQUEST_REJECTED");
+});
+
+test("all İŞKUR requests are POST; fresh forms serve refresh, changed filters, backward paging and detail", async () => {
+  const requests = [];
+  const fetcher = async (url, options) => {
+    requests.push({ url, options }); assert.equal(options.method, "POST"); assert.equal(options.redirect, "error");
+    assert.equal(options.referrer, ""); assert.equal(options.referrerPolicy, "no-referrer");
+    if (String(url).includes("AcikIsIlanDetay.aspx")) return html(detailPage());
+    if (!new URLSearchParams(options.body).has("__EVENTTARGET")) { assert.equal(options.body, "__LASTFOCUS="); return html(initialPage); }
+    const body = new URLSearchParams(options.body);
+    const page = body.get("__EVENTTARGET").endsWith("CommandItem_Search") ? 1 : Number(body.get("ctl04$ctlDataPagerDetay$txtCurrentPage"));
+    return html(searchPage(page, "0000000000" + page));
+  };
+  const prefs = emptyDashboard().preferences;
+  await searchIskur(prefs, 1, "post-only", undefined, fetcher); assert.equal(requests.length, 2);
+  await searchIskur(prefs, 1, "post-only", undefined, fetcher); assert.equal(requests.length, 3);
+  const changed = { ...prefs, keyword: "yazılım" };
+  await searchIskur(changed, 1, "post-only", undefined, fetcher); assert.equal(requests.length, 4);
+  await searchIskur(changed, 2, "post-only", undefined, fetcher);
+  await searchIskur(changed, 3, "post-only", undefined, fetcher);
+  const previous = await searchIskur(changed, 2, "post-only", undefined, fetcher);
+  assert.equal(requests.length, 7); assert.equal(previous.jobs[0].id, "00000000002");
+  assert.equal(new URLSearchParams(requests.at(-1).options.body).get("__VIEWSTATE"), "page-3&+=");
+  assert.equal((await getIskurJob("00000000123", undefined, fetcher)).ok, true);
+  assert.equal(requests.length, 8); assert.equal(requests.at(-1).options.body, "__LASTFOCUS=");
 });

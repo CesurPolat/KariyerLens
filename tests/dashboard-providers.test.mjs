@@ -21,7 +21,7 @@ globalThis.fetch = async (input, options = {}) => {
   if (url.hostname === "esube.iskur.gov.tr") {
     if (mode === "iskur-failure") return new Response("error", { status: 503 });
     if (url.pathname.endsWith("AcikIsIlanDetay.aspx")) return html(detailPage(url.searchParams.get("uiID")));
-    if (!options.body) return html(initialPage);
+    if (!new URLSearchParams(options.body).has("__EVENTTARGET")) return html(initialPage);
     const body = new URLSearchParams(options.body);
     const page = body.get("__EVENTTARGET").endsWith("CommandItem_Search") ? 1 : Number(body.get("ctl04$ctlDataPagerDetay$txtCurrentPage"));
     return html(searchPage(page, page === 1 ? "00000000123" : "00000000456", { next: page === 1 }));
@@ -33,7 +33,7 @@ globalThis.fetch = async (input, options = {}) => {
     const imported = body.jobProperties.includes("5");
     return Response.json({ data: { currentPage: body.currentPage, totalJobCount: imported ? 1 : 100,
       jobs: { items: [{ id: imported ? "00000000123" : String(body.currentPage * 1000), title: "Kariyer React", jobUrl: "/is-ilani/react-1000", companyName: "AŞ" }] },
-      filters: { cities: { items: [{ id: "34", name: "İstanbul" }] }, workModels: { items: [] } } } });
+      filters: { cities: { items: [{ id: "34", name: "İstanbul" }] }, workModels: { items: [] }, workTypes: { items: [{ id: "full-code", name: "Tam Zamanlı" }, { id: "part-code", name: "Yarı Zamanlı" }] } } } });
   }
   if (url.pathname === "/jb/api/candidates/resumes/view") return Response.json([]);
   if (url.pathname === "/candidates/job_apply_status") return Response.json({ isCandidateAppliedJob: false });
@@ -73,6 +73,25 @@ test("provider failures preserve old pages and do not block the successful provi
   mode = "ok";
   const invalid = (await invoke({ action: "search", preferences: { ...preferences, cities: ["invented"] }, page: 1 })).data;
   assert.match(invalid.discovery.error, /Filtre/); assert.equal(invalid.iskurDiscovery.error, "");
+});
+
+test("one shared province and employment selection maps to each provider's own filter codes", async () => {
+  const prefs = emptyDashboard().preferences;
+  await invoke({ action: "search", preferences: prefs, page: 1 });
+  requests.length = 0;
+  const filters = { province: "istanbul", employmentType: "full-time" };
+  const reply = await invoke({ action: "search", preferences: { ...prefs, filters }, page: 1 });
+  assert.equal(reply.data.discovery.error, ""); assert.equal(reply.data.iskurDiscovery.error, "");
+  const kariyer = JSON.parse(requests.find(r => r.url.pathname === "/search").options.body);
+  assert.deepEqual(kariyer.location.cities, ["34"]); assert.deepEqual(kariyer.workTypes, ["full-code"]);
+  const iskur = new URLSearchParams(requests.find(r => r.url.pathname.endsWith("AcikIsIlanAra.aspx") && r.options.body).options.body);
+  assert.equal(iskur.get("ctl04$ctlIl"), "34"); assert.equal(iskur.get("ctl04$ctlCalismaSekli"), "1");
+  assert.deepEqual(reply.data.preferences.filters, filters);
+  assert.deepEqual(reply.data.discovery.appliedPreferences.filters, filters);
+  const second = await invoke({ action: "search", provider: "kariyer", preferences: { ...prefs, filters: { province: "mugla", employmentType: "part-time" } }, page: 2 });
+  assert.deepEqual(second.data.discovery.appliedPreferences.filters, filters);
+  const pageRequest = JSON.parse(requests.filter(r => r.url.pathname === "/search").at(-1).options.body);
+  assert.deepEqual(pageRequest.location.cities, ["34"]); assert.deepEqual(pageRequest.workTypes, ["full-code"]);
 });
 test("same numeric identifiers remain separate through tracking, editing, deletion and account changes", async () => {
   const jobId = "00000000123";

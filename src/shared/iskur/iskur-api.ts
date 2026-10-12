@@ -2,6 +2,7 @@ import { parse } from "parse5";
 import type { DefaultTreeAdapterMap } from "parse5";
 import type { Job, JobResult } from "../types.js";
 import { jobUrlFor, jobReferenceFromUrl } from "../job-provider.js";
+import { ensureIskurOriginRemoved } from "./iskur-request-headers.js";
 import type { JobDiscoveryPreferences, DiscoveryJob } from "../../dashboard/models.js";
 
 const ORIGIN = "https://esube.iskur.gov.tr";
@@ -58,15 +59,16 @@ export function readIskurForm(html: string) {
       for (const option of selected.length ? selected : options.slice(0, 1)) body.append(name, hasAttr(option, "value") ? attr(option, "value") : compact(option));
     } else body.append(name, control.tagName === "textarea" ? text(control) : hasAttr(control, "value") ? attr(control, "value") : ["checkbox", "radio"].includes(type) ? "on" : "");
   }
-  if (!body.has("__VIEWSTATE")) fail("INVALID_RESPONSE", "İŞKUR formunun durum alanları eksik.");
+  if (!body.get("__VIEWSTATE")) fail("INVALID_RESPONSE", "İŞKUR formunun durum alanları eksik.");
   const options: Option[] = elements(byName(form, "ctl04$ctlIl") ?? form, n => n.tagName === "option")
     .map(n => ({ id: attr(n, "value"), name: compact(n) })).filter(n => /^\d{1,4}$/.test(n.id) && n.name);
   return { root, body, provinces: options };
 }
 export function iskurSearchBody(html: string, preferences: JobDiscoveryPreferences): URLSearchParams {
-  const { body, provinces } = readIskurForm(html);
+  const { body: formBody, provinces } = readIskurForm(html);
   if (preferences.iskur.province && !provinces.some(o => o.id === preferences.iskur.province)) fail("INVALID_ARGUMENTS", "İŞKUR il filtresi geçersiz veya güncel değil.");
-  body.set("__EVENTTARGET", SEARCH_TARGET); body.set("__EVENTARGUMENT", ""); body.set("__LASTFOCUS", "");
+  const body = new URLSearchParams({ __EVENTTARGET: SEARCH_TARGET, __EVENTARGUMENT: "", __LASTFOCUS: "" });
+  for (const [name, value] of formBody) if (!["__EVENTTARGET", "__EVENTARGUMENT", "__LASTFOCUS"].includes(name)) body.append(name, value);
   body.set("ctl04$ctlArananMetin2", preferences.keyword);
   body.set("ctl04$ctlIl", preferences.iskur.province);
   body.set("ctl04$ctlIlce", "");
@@ -134,49 +136,67 @@ export function parseIskurSearch(html: string, page: number, now = Date.now()): 
     totalKnown: empty || Boolean(totalMatch), hasNext: commands.some(c => c.next || (c.page !== null && c.page > page)), provinces, commands };
 }
 
-interface Session { html: string; page: number; touched: number }
+interface Session { html: string; page: number; touched: number; scope: string }
 // Hidden fields remain transient; each account/filter combination has its own form state.
 const sessions = new Map<string, Session>();
-async function request(url: string, body?: URLSearchParams, signal?: AbortSignal, fetcher: typeof fetch = fetch): Promise<string> {
+async function request(url: string, body = new URLSearchParams({ __LASTFOCUS: "" }), signal?: AbortSignal, fetcher: typeof fetch = fetch): Promise<string> {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 25_000);
   try {
-    const response = await fetcher(url, { method: body ? "POST" : "GET", credentials: "include",
-      headers: { Accept: "text/html", ...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}) },
-      ...(body ? { body: body.toString() } : {}), signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal });
+    try { await ensureIskurOriginRemoved(); }
+    catch { fail("ISKUR_HEADER_RULE_FAILED", "İŞKUR Origin başlığı kaldırma kuralı kurulamadı. Uzantıyı yeniden yükleyin."); }
+    const response = await fetcher(url, { method: "POST", credentials: "include", referrer: "", referrerPolicy: "no-referrer",
+      headers: { Accept: "text/html", "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(), redirect: "error", signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal });
+    const responseBody = await response.text();
+    // Rejection pages can arrive with HTTP 200; stop before any further POST or paging.
+    if (/reddedildi|rejected/i.test(responseBody)) {
+      const rejection = compact(document(responseBody));
+      if (normalize(rejection).includes("yapilmayacalisilanistekreddedildi")) {
+        const requestId = rejection.match(/(?:İstek|Istek)\s*ID(?:['’]si)?\s*:\s*(\d{1,32})/i)?.[1];
+        sessions.clear();
+        fail("ISKUR_REQUEST_REJECTED", "İŞKUR bu isteği reddetti. Otomatik tekrar denenmedi; İŞKUR sayfasını tarayıcıda kontrol edin." + (requestId ? ` İstek ID'si: ${requestId}` : ""));
+      }
+    }
     if (response.status === 401 || response.status === 403) fail("ISKUR_AUTH_REQUIRED", "İŞKUR oturumu veya doğrulaması gerekiyor. İŞKUR sayfasını tarayıcıda açın.");
     if (response.status === 429) fail("RATE_LIMITED", "İŞKUR istek sınırına ulaşıldı. Bir süre sonra tekrar deneyin.");
     if (response.status === 404) fail("NOT_FOUND", "İŞKUR ilanı bulunamadı.");
     if (!response.ok) fail("HTTP_ERROR", `İŞKUR isteği başarısız (${response.status}).`);
     if (response.url && (new URL(response.url).origin !== ORIGIN || /(?:login|giris|uyegirisi)/i.test(new URL(response.url).pathname))) fail("ISKUR_AUTH_REQUIRED", "İŞKUR isteği giriş sayfasına yönlendirildi.");
     if (!(response.headers.get("content-type") ?? "").includes("text/html")) fail("INVALID_RESPONSE", "İŞKUR beklenen HTML yanıtını döndürmedi.");
-    return await response.text();
+    return responseBody;
   } catch (error) {
-    if (error instanceof IskurError) throw error;
+    if (error instanceof IskurError) {
+      if (["ISKUR_AUTH_REQUIRED", "HTTP_ERROR"].includes(error.code)) sessions.clear();
+      throw error;
+    }
     throw new IskurError(signal?.aborted ? "CANCELLED" : controller.signal.aborted ? "TIMEOUT" : "CONNECTION_ERROR", signal?.aborted ? "İŞKUR isteği durduruldu." : "İŞKUR bağlantısı tamamlanamadı. Tekrar deneyin.");
   } finally { clearTimeout(timer); }
 }
 export async function searchIskur(preferences: JobDiscoveryPreferences, page: number, scope: string, signal?: AbortSignal, fetcher: typeof fetch = fetch): Promise<IskurPage> {
   const key = JSON.stringify([scope, preferences.keyword, preferences.includeOlder, preferences.iskur]);
   let session = sessions.get(key);
-  if (!session || page === 1 || session.page > page || Date.now() - session.touched > 10 * 60_000) {
-    const initial = await request(SEARCH_URL, undefined, signal, fetcher);
+  if (!session || page === 1 || Date.now() - session.touched > 10 * 60_000) {
+    const latest = [...sessions.values()].reverse().find(s => s.scope === scope && Date.now() - s.touched <= 10 * 60_000);
+    const initial = latest?.html ?? await request(SEARCH_URL, undefined, signal, fetcher);
     const html = await request(SEARCH_URL, iskurSearchBody(initial, preferences), signal, fetcher);
-    session = { html, page: 1, touched: Date.now() };
+    session = { html, page: 1, touched: Date.now(), scope };
   }
   let result = parseIskurSearch(session.html, session.page);
   let hops = 0;
-  while (session.page < page) {
+  while (session.page !== page) {
     if (++hops > 20) fail("INVALID_ARGUMENTS", "İŞKUR oturumu yenilendi. İlk sayfadan tekrar başlayın.");
-    const command = result.commands.find(c => c.jump) ?? result.commands.find(c => c.page === page) ?? result.commands.find(c => c.page === session!.page + 1) ?? result.commands.find(c => c.next);
+    const direction = page > session.page ? 1 : -1;
+    const command = result.commands.find(c => c.jump) ?? result.commands.find(c => c.page === page) ?? result.commands.find(c => c.page === session!.page + direction)
+      ?? result.commands.find(c => direction > 0 ? c.next : c.target.endsWith("$btnPrev"));
     if (!command) fail("INVALID_ARGUMENTS", "İŞKUR sonraki sayfa bağlantısı bulunamadı. Aramayı yenileyin.");
     const body = readIskurForm(session.html).body;
     body.set("__EVENTTARGET", command.target); body.set("__EVENTARGUMENT", command.argument); body.set("__LASTFOCUS", "");
     if (command.jump) body.set("ctl04$ctlDataPagerDetay$txtCurrentPage", String(page));
     const html = await request(SEARCH_URL, body, signal, fetcher);
-    const nextPage: number = command.jump ? page : command.page ?? session.page + 1;
+    const nextPage: number = command.jump ? page : command.page ?? session.page + direction;
     const next = parseIskurSearch(html, nextPage);
     if (JSON.stringify(next.jobs.map(j => j.id)) === JSON.stringify(result.jobs.map(j => j.id))) fail("INVALID_RESPONSE", "İŞKUR aynı sayfayı tekrar döndürdü; önceki sonuçlar korundu.");
-    session = { html, page: nextPage, touched: Date.now() }; result = next;
+    session = { html, page: nextPage, touched: Date.now(), scope }; result = next;
   }
   sessions.delete(key); sessions.set(key, session);
   while (sessions.size > 8) sessions.delete(sessions.keys().next().value!);

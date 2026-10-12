@@ -110,7 +110,7 @@ export function projectSearch(value: unknown): unknown {
       return { id: string(j.id, 16), title: string(j.title, 500), companyName: string(j.companyName, 500), jobUrl: kariyerUrl(j.jobUrl),
         location: string(j.locationText, 300), workModel: string(j.workModelText ?? j.workModel, 100), publishedAt: string(j.publishDate ?? j.publishedAt ?? (j.jobDateStatus === "New" ? j.postingDate : ""), 100) };
     }) : null,
-    options: { cities: options(filters.cities ?? location.cities ?? filters.locations), workModels: options(filters.workModels) } };
+    options: { cities: options(filters.cities ?? location.cities ?? filters.locations), workModels: options(filters.workModels), workTypes: options(filters.workTypes) } };
 }
 export function cvContent(value: unknown): Record<string, unknown> {
   const data = object(value);

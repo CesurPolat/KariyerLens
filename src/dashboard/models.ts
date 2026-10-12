@@ -34,6 +34,7 @@ export type ResumeView = z.infer<typeof resumeViewSchema>;
 const resumeViewsSchema = z.object({ records: z.array(resumeViewSchema).max(100), fetchedAt: timestamp.nullable(),
   partial: z.boolean(), error: text }).strict();
 export const preferencesSchema = z.object({ keyword: z.string().trim().max(200), cities: z.array(z.string().max(30)).max(10),
+  filters: z.object({ province: z.string().max(200).regex(/^[a-z0-9]*$/), employmentType: z.enum(["", "full-time", "part-time"]) }).strict().optional(),
   providers: z.array(provider).min(1).max(2).refine(v => new Set(v).size === v.length).default(["kariyer", "iskur"]),
   iskur: z.object({ province: z.string().regex(/^$|^\d{1,4}$/), employmentType: z.enum(["", "1", "2"]), sector: z.enum(["ozelSektorRadio", "kamuRadio"]) }).strict().default({ province: "", employmentType: "", sector: "ozelSektorRadio" }),
   workModels: z.array(z.string().max(30)).max(3), includeOlder: z.boolean().default(false), resumeId: z.string().max(512) }).strict();
@@ -46,7 +47,7 @@ export const discoverySchema = z.object({ jobs: z.array(discoveryJobSchema).max(
   fetchedAt: timestamp.nullable(), currentPage: z.number().int().positive(), total: z.number().nonnegative(),
   hasNext: z.boolean().default(false), totalKnown: z.boolean().default(true), error: text.default(""),
   appliedPreferences: preferencesSchema.nullable().default(null),
-  options: z.object({ cities: z.array(optionSchema).max(200), workModels: z.array(optionSchema).max(20) }).strict() }).strict();
+  options: z.object({ cities: z.array(optionSchema).max(200), workModels: z.array(optionSchema).max(20), workTypes: z.array(optionSchema).max(20).default([]) }).strict() }).strict();
 export const emptyDiscovery = () => discoverySchema.parse({ jobs: [], seen: {}, fetchedAt: null, currentPage: 1, total: 0, options: { cities: [], workModels: [] } });
 const currentDashboardSchema = z.object({ version: z.literal(2), applications: z.array(applicationSchema).max(500),
   resumeViews: resumeViewsSchema.default({ records: [], fetchedAt: null, partial: true, error: "" }),

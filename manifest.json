@@ -10,7 +10,7 @@
     "48": "assets/icons/icon-48.png",
     "128": "assets/icons/icon-128.png"
   },
-  "permissions": ["storage", "webRequest"],
+  "permissions": ["storage", "webRequest", "declarativeNetRequestWithHostAccess"],
   "host_permissions": ["https://*.kariyer.net/*", "https://esube.iskur.gov.tr/*", "https://api.openai.com/*", "https://openrouter.ai/*", "https://llm.cesurpolat.dev/*"],
   "options_ui": { "page": "src/options/options.html", "open_in_tab": true },
   "background": {
