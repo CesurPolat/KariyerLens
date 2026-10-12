@@ -98,7 +98,8 @@ export async function callKariyerTool(name: string, input: unknown, jobId: strin
     const response = await fetcher(url, { method: endpoint.method ?? "GET", headers, credentials: "include",
       redirect: "error", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
       ...(endpoint.method ? { body: JSON.stringify(params) } : {}) });
-    if (response.status === 401 || response.status === 403) return failure("AUTH_REQUIRED", "Kariyer.net oturumu geçersiz veya istek erişim korumasına takıldı. Oturumunuzu yenileyin.");
+    if (response.status === 401) return failure("AUTH_REQUIRED", "Kariyer.net oturumu geçersiz. Oturumunuzu yenileyin.");
+    if (response.status === 403) return failure("ACCESS_DENIED", "Kariyer.net isteğe erişimi engelledi. İstek durduruldu; daha sonra elle deneyin.");
     if (response.status === 429) return failure("RATE_LIMITED", "Kariyer.net istek sınırına ulaşıldı. Daha sonra deneyin.");
     if (!response.ok) return failure("HTTP_ERROR", `Kariyer.net isteği başarısız oldu (${response.status}).`);
     if (!(response.headers.get("content-type") ?? "").includes("json")) return failure("INVALID_RESPONSE", "Kariyer.net JSON yanıtı vermedi.");

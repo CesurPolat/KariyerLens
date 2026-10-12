@@ -36,10 +36,12 @@ window.chrome = { storage: { local: {
     if (request.action === "refresh") state.resumeViews = { records: [{ resumeId: "cv-A", resumeName: "Teknik CV", jobId: "123", jobName: "Frontend Geliştirici", companyName: "Nova Teknoloji", viewedAt: today, viewCount: 3 }], fetchedAt: Date.now(), partial: true, error: "" };
     if (request.action === "importApplications") {
       const jobIds = request.page === 1 ? ["601", "602"] : ["603"];
+      const boundary = jobIds.findIndex(id => state.applications.some(a => a.jobId === id));
+      const pending = boundary < 0 ? jobIds : jobIds.slice(0, boundary);
       let added = 0;
-      for (const id of jobIds) if (!state.applications.some(a => a.jobId === id)) { state.applications.push(example(id, "İçe aktarılan " + id, "İçe aktarma AŞ", "applied")); added++; }
+      for (const id of pending) { state.applications.push(example(id, "İçe aktarılan " + id, "İçe aktarma AŞ", "applied")); added++; }
       return { ok: true, scope: "a".repeat(64), data: structuredClone(state), importSummary: {
-        added, updated: jobIds.length - added, total: 3, page: request.page, nextPage: request.page === 1 ? 2 : null,
+        added, updated: 0, total: 3, page: request.page, nextPage: boundary < 0 && request.page === 1 ? 2 : null,
         jobIds, detailErrors: 0, warning: ""
       } };
     }
@@ -201,7 +203,7 @@ async function run() {
   check(document.querySelectorAll(".application-table:not(.resume-view-table) tbody tr").length === 6, "İçe aktarma tüm sayfaları getirir");
   check(calls.filter(c => c.payload?.action === "importApplications")[1].payload.seenJobIds.length === 2, "Sayfalar arasında görülen ilanlar aktarılır");
   button("Başvurularımı içe aktar").click();
-  await until(() => calls.filter(c => c.payload?.action === "importApplications").length === 4 && !button("Başvurularımı içe aktar").disabled);
+  await until(() => calls.filter(c => c.payload?.action === "importApplications").length === 3 && !button("Başvurularımı içe aktar").disabled);
   check(document.querySelectorAll(".application-table:not(.resume-view-table) tbody tr").length === 6 && state.applications[0].notes === "Görüşme notu", "Tekrar içe aktarma kayıtları çoğaltmaz ve notları korur");
   button("CV A/B Testi").click(); await pause(); button("CV’leri getir").click(); await pause();
   check(document.querySelectorAll(".variant-card").length === 2, "A ve B ölçümleri ayrı gösterilir");

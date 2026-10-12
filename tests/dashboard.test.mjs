@@ -10,6 +10,8 @@ const db = {};
 let currentId = "101", token = "Bearer account-one", cvVersion = "SQL", apiMode = "ok", applied = true, searchCalls = 0, providerCalls = 0, changeDuringBase = false;
 let providerBody;
 let importMode = "ok", detailMode = "ok";
+let importPages;
+const importRequests = [], detailRequests = [];
 let viewsMode = "ok";
 let secondResumeId = "cv-B";
 const importJob = id => ({ id, title: "İçe aktarılan " + id, companyName: "İçe aktarma AŞ", jobUrl: "/is-ilani/ilan-" + id });
@@ -19,6 +21,7 @@ function capture(value = token) { token = value; for (const origin of [candidate
 capture();
 globalThis.fetch = async (input, options) => {
   const url = new URL(String(input));
+  if (url.pathname === "/get-job-application-detail") detailRequests.push(url.searchParams.get("jobId"));
   if (url.hostname === "api.openai.com") { providerCalls++; providerBody = JSON.parse(options.body); return Response.json({ choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: "CV karşılaştırması hazır." } }] }); }
   if (url.pathname === "/candidates/base-info") { if (changeDuringBase) { changeDuringBase = false; capture("Bearer changed"); } return Response.json({ id: Number(currentId), name: "Private Name", cookieValue: "private-cookie" }); }
   if (url.pathname === "/job") return Response.json({ jobGeneralInformation: { id: url.searchParams.get("jobId"), title: "Frontend geliştirici", jobUrl: "/is-ilani/frontend-123", qualifications: "<p>React SQL</p>", isActive: true }, jobCompanyInformation: { companyName: "Örnek AŞ" } });
@@ -53,6 +56,7 @@ globalThis.fetch = async (input, options) => {
   if (url.pathname === "/search") {
     const body = JSON.parse(options.body);
     if (body.jobProperties?.includes("5")) {
+      importRequests.push(body.currentPage);
       assert.equal(body.memberId, Number(currentId)); assert.equal(body.dontShowAppliedJobs, false);
       assert.equal(body.size, 12); assert.equal(body.isSearchFromProfilePage, true);
       if (importMode === "401") return new Response("Denied", { status: 401 });
@@ -60,7 +64,7 @@ globalThis.fetch = async (input, options) => {
       if (importMode === "timeout") throw new DOMException("timeout", "TimeoutError");
       if (importMode === "invalid") return Response.json({ data: { jobs: {} } });
       if (importMode === "switch") { capture("Bearer switched-during-import"); }
-      const items = importMode === "empty" ? [] : body.currentPage === 1 || importMode === "repeat"
+      const items = importPages ? (importPages[body.currentPage - 1] || []).map(importJob) : importMode === "empty" ? [] : body.currentPage === 1 || importMode === "repeat"
         ? [123, ...Array.from({ length: 11 }, (_, i) => 700 + i)].map(importJob)
         : [711, 712].map(importJob);
       items.push({ ...importJob(999), isSponsored: true });
@@ -204,24 +208,58 @@ test("reordered application interactions do not create duplicate history", () =>
   assert.equal(mergeApplication(app, reversed).api.events.length, 2);
 });
 
-test("manual import paginates, excludes sponsored jobs, deduplicates and preserves manual fields and CV assignment", async () => {
+test("import stops immediately at the first saved job without fetching its details", async () => {
   const before = (await invoke({ action: "get" })).data.applications.find(a => a.jobId === "123");
   const scope = await accountScope(currentId);
+  const pageCalls = importRequests.length, detailCalls = detailRequests.length;
   const first = await handleDashboard({ action: "importApplications", page: 1, seenJobIds: [] }, scope, true);
-  assert.equal(first.importSummary.added, 11); assert.equal(first.importSummary.updated, 1);
-  assert.equal(first.importSummary.nextPage, 2);
-  const second = await invoke({ action: "importApplications", page: 2, seenJobIds: first.importSummary.jobIds });
-  assert.equal(second.importSummary.added, 2); assert.equal(second.importSummary.nextPage, null);
-  assert.equal(second.data.applications.length, 14);
-  assert.equal(second.data.applications.some(a => a.jobId === "999"), false);
-  const existing = second.data.applications.find(a => a.jobId === "123");
+  assert.equal(first.importSummary.added, 0); assert.equal(first.importSummary.updated, 0);
+  assert.equal(first.importSummary.nextPage, null);
+  assert.equal(importRequests.length - pageCalls, 1);
+  assert.equal(detailRequests.length, detailCalls);
+  const existing = first.data.applications.find(a => a.jobId === "123");
   for (const key of ["notes", "status", "statusManual", "variantId", "appliedAt", "manualEvents", "responded", "interviewed"]) assert.deepEqual(existing[key], before[key]);
-  const added = second.data.applications.find(a => a.jobId === "700");
-  assert.equal(added.status, "applied"); assert.equal(added.api.cvId, "cv+A=");
-  assert.equal(added.api.events.filter(e => e.viewed).length, 2);
-  assert.ok(added.api.appliedAt); assert.equal(added.variantId, "");
-  const repeat = await invoke({ action: "importApplications", page: 1, seenJobIds: [] });
-  assert.equal(repeat.importSummary.added, 0); assert.equal(repeat.data.applications.length, 14);
+  assert.deepEqual(existing.api, before.api);
+});
+
+test("import adds only jobs before a known boundary, including a boundary on the next page", async () => {
+  try {
+    currentId = "907"; capture("Bearer incremental-import");
+    const scope = await accountScope(currentId);
+    await transactDashboard(scope, () => {}, state => {
+      state.applications.push(newTrackedApplication({ jobId: "123", title: "Mevcut", companyName: "", jobUrl: "" }));
+    });
+    importPages = [Array.from({ length: 12 }, (_, i) => 700 + i), [711, 712, 123, 713]];
+    const pageCalls = importRequests.length, detailCalls = detailRequests.length;
+    const first = await invoke({ action: "importApplications" });
+    assert.equal(first.importSummary.added, 12); assert.equal(first.importSummary.nextPage, 2);
+    const second = await invoke({ action: "importApplications", page: 2, seenJobIds: first.importSummary.jobIds });
+    assert.equal(second.importSummary.added, 1); assert.equal(second.importSummary.updated, 0);
+    assert.equal(second.importSummary.nextPage, null);
+    assert.equal(second.data.applications.length, 14);
+    assert.deepEqual(importRequests.slice(pageCalls), [1, 2]);
+    assert.deepEqual(detailRequests.slice(detailCalls), Array.from({ length: 13 }, (_, i) => String(700 + i)));
+    assert.equal(second.data.applications.some(a => a.jobId === "713" || a.jobId === "999"), false);
+    const added = second.data.applications.find(a => a.jobId === "700");
+    assert.equal(added.status, "applied"); assert.equal(added.api.cvId, "cv+A=");
+    assert.equal(added.api.events.filter(e => e.viewed).length, 2);
+    assert.ok(added.api.appliedAt); assert.equal(added.variantId, "");
+    const repeat = await invoke({ action: "importApplications", page: 1, seenJobIds: [] });
+    assert.equal(repeat.importSummary.added, 0); assert.equal(repeat.data.applications.length, 14);
+    assert.equal(repeat.importSummary.nextPage, null);
+    assert.equal(detailRequests.length - detailCalls, 13);
+  } finally { importPages = undefined; currentId = "101"; capture("Bearer import-restored"); }
+});
+
+test("an empty local list can import all pages once", async () => {
+  try {
+    currentId = "906"; capture("Bearer first-import");
+    const first = await invoke({ action: "importApplications" });
+    assert.equal(first.importSummary.added, 12); assert.equal(first.importSummary.nextPage, 2);
+    const second = await invoke({ action: "importApplications", page: 2, seenJobIds: first.importSummary.jobIds });
+    assert.equal(second.importSummary.added, 2); assert.equal(second.importSummary.nextPage, null);
+    assert.equal(second.data.applications.length, 14);
+  } finally { currentId = "101"; capture("Bearer import-restored"); }
 });
 test("import empty, malformed and failed pages retain successful records", async () => {
   const before = (await invoke({ action: "get" })).data;
@@ -243,13 +281,14 @@ test("import detail failures preserve API snapshots and never invent dates or CV
     const missing = await invoke({ action: "importApplications" });
     const old = missing.data.applications.find(a => a.jobId === "123");
     assert.deepEqual(old.api.events, before.api.events); assert.equal(old.api.fetchedAt, before.api.fetchedAt);
-    assert.equal(missing.importSummary.detailErrors, 12); assert.ok(old.api.error);
+    assert.equal(missing.importSummary.detailErrors, 0); assert.deepEqual(old.api, before.api);
     currentId = "909"; capture("Bearer import-isolated");
     const fresh = await invoke({ action: "importApplications" });
     const app = fresh.data.applications[0];
     assert.equal(app.api.applied, true); assert.equal(app.status, "applied");
     assert.equal(app.appliedAt, ""); assert.equal(app.api.appliedAt, ""); assert.equal(app.api.cvId, "");
     detailMode = "401";
+    currentId = "908"; capture("Bearer denied-import");
     const unchanged = (await invoke({ action: "get" })).data;
     await assert.rejects(invoke({ action: "importApplications" }));
     assert.deepEqual((await invoke({ action: "get" })).data, unchanged);
@@ -261,6 +300,7 @@ test("import detail failures preserve API snapshots and never invent dates or CV
 });
 test("import stops repeated API pages and respects the 500 record limit without eviction", async () => {
   try {
+    currentId = "913"; capture("Bearer repeated-import");
     importMode = "repeat";
     const first = await invoke({ action: "importApplications" });
     const repeated = await invoke({ action: "importApplications", page: 2, seenJobIds: first.importSummary.jobIds });

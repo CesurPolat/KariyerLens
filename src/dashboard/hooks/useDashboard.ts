@@ -14,13 +14,14 @@ export function useDashboard() {
   const [connecting, setConnecting] = useState(false), [connectionStatus, setConnectionStatus] = useState("");
   const [autoConnectEnabled, setAutoConnectEnabled] = useState(false), [savingPreference, setSavingPreference] = useState(false);
   const autoConnectEnabledRef = useRef(false), automaticPaused = useRef(false), preferenceWriting = useRef(false);
+  const automaticAttempted = useRef(false);
   const autoConnection = useRef<{ port: chrome.runtime.Port; heartbeat?: ReturnType<typeof setInterval> } | null>(null);
   const verifiedScope = useRef<string | null>(null);
   const mounted = useRef(true), mutationRunning = useRef(false);
   const resetAccount = () => { verifiedScope.current = null; setState(null); setCvList([]); resetAnalysis(); };
   const { analysis, cancelAnalysis, analyze, resetAnalysis } = useDashboardAnalysis({ verifiedScope, onError: setError, onAuthFailure: () => {
     resetAccount();
-    if (autoConnectEnabledRef.current && !automaticPaused.current && !preferenceWriting.current) openKariyer();
+    automaticPaused.current = true;
   } });
   function applyReply(result: Extract<DashboardReply, { ok: true }>) {
     automaticPaused.current = false;
@@ -62,6 +63,7 @@ export function useDashboard() {
   }
   function openKariyer() {
     if (mutationRunning.current) return;
+    automaticAttempted.current = true;
     automaticPaused.current = false;
     mutationRunning.current = true;
     resetAccount(); setError(null); setNotice(""); setBusy(true); setLoading(false); setConnecting(true); setConnectionStatus("Hesabın doğrulanıyor…");
@@ -148,24 +150,22 @@ export function useDashboard() {
       mutationRunning.current = false;
       if (mounted.current) {
         setBusy(false); setLoading(false);
-        if (needsConnection && autoConnectEnabledRef.current && !automaticPaused.current) openKariyer();
+        if (needsConnection && request.action === "get" && autoConnectEnabledRef.current && !automaticPaused.current && !automaticAttempted.current) openKariyer();
       }
     }
   };
   useEffect(() => {
     mounted.current = true;
-    let active = true, preferenceReady = false;
+    let active = true;
     void (async () => {
       let enabled = false;
       try { enabled = await loadAutoConnectPreference(); } catch { /* Manual connection remains available if storage is unavailable. */ }
       if (!active) return;
-      autoConnectEnabledRef.current = enabled; setAutoConnectEnabled(enabled); preferenceReady = true;
+      autoConnectEnabledRef.current = enabled; setAutoConnectEnabled(enabled);
       void act({ action: "get" });
     })();
-    const reconnect = () => { if (preferenceReady && document.visibilityState === "visible" && !mutationRunning.current && !preferenceWriting.current) { resetAccount(); setLoading(true); void act({ action: "get" }); } };
-    document.addEventListener("visibilitychange", reconnect);
-    return () => { active = false; mounted.current = false; document.removeEventListener("visibilitychange", reconnect); if (autoConnection.current) stopAutoConnect(); };
+    return () => { active = false; mounted.current = false; if (autoConnection.current) stopAutoConnect(); };
   }, []);
-  function reconnect() { if (mutationRunning.current || preferenceWriting.current) return; automaticPaused.current = false; resetAccount(); setLoading(true); void act({ action: "get" }); }
+  function reconnect() { if (mutationRunning.current || preferenceWriting.current) return; automaticPaused.current = false; automaticAttempted.current = false; resetAccount(); setLoading(true); void act({ action: "get" }); }
   return { state, busy: busy || savingPreference, loading, notice, error, cvList, act, reconnect, connecting, connectionStatus, autoConnectEnabled, toggleAutoConnect, openKariyer, cancelAutoConnect, analysis, cancelAnalysis, analyze, resetAnalysis };
 }

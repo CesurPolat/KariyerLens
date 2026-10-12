@@ -64,12 +64,15 @@ test("only a candidate Bearer from the owned tab triggers verification and closi
  assert.deepEqual(h.removed, [20]); assert.equal(h.onRemoved.size, 0);
 });
 
-test("failed account verification keeps the tab open and can retry after another owned request", async () => {
+test("failed account verification ignores repeated rejected tokens and retries only a new token", async () => {
  const h = setup([auth, { ok: false, code: "AUTH_REQUIRED", message: "Invalid session" }, connected]);
  h.send({ type: "start" }); await until(() => h.created.length); await tick();
  capture(); await until(() => h.calls === 2); await tick();
  assert.equal(h.removed.length, 0); assert.ok(!h.events.some(e => e.type === "connected"));
- capture(); await until(() => h.events.some(e => e.type === "connected"));
+ for (let i = 0; i < 50; i++) capture();
+ await tick(); assert.equal(h.calls, 2);
+ capture(20, [{ name: "Authorization", value: "Bearer refreshed-session" }]);
+ await until(() => h.events.some(e => e.type === "connected"));
  h.disconnect(); assert.equal(h.removed.length, 0);
 });
 

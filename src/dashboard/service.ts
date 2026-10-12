@@ -76,6 +76,9 @@ const appliedJobPageSchema = z.object({ total: z.number().int().nonnegative(), p
   items: z.array(z.object({ jobId: z.string().regex(/^\d{1,16}$/), title: z.string().max(500), companyName: z.string().max(500),
     jobUrl: z.string().max(2000), sponsored: z.boolean() }).strict()).max(50) }).strict();
 async function importApplications(account: Account, pageNumber: number, seenJobIds: string[]): Promise<ApplicationImportSummary> {
+  const state = await readState(account);
+  const seen = new Set(seenJobIds);
+  const existing = new Set(state.applications.map(a => a.jobId).filter(id => !seen.has(id)));
   const result = await account.call("search_jobs", { memberId: Number(account.candidateId), jobProperties: ["5"],
     isSearchFromProfilePage: true, dontShowAppliedJobs: false, currentPage: pageNumber, size: IMPORT_PAGE_SIZE }, "", projectAppliedJobs);
   const parsed = appliedJobPageSchema.safeParse(result.data);
@@ -90,9 +93,14 @@ async function importApplications(account: Account, pageNumber: number, seenJobI
     return summary;
   }
   if (ids.every(id => seenJobIds.includes(id))) { summary.warning = "API aynı başvuru sayfasını tekrar döndürdü; tekrarları eklemeden duruldu."; return summary; }
+  const boundary = jobs.findIndex(job => existing.has(job.jobId));
+  const remaining = Math.max(0, 500 - state.applications.length);
+  const newJobs = (boundary < 0 ? jobs : jobs.slice(0, boundary)).filter(job => !seen.has(job.jobId));
+  const pending = newJobs.slice(0, remaining);
+  if (pending.length < newJobs.length) summary.warning = "500 takip kaydı sınırına ulaşıldı. Yeni kayıtlar için listede yer açın.";
   const snapshots: { job: typeof jobs[number]; api: TrackedApplication["api"] | null; error: string }[] = [];
   let rateLimited = false;
-  for (const job of jobs) {
+  for (const job of pending) {
     let api: TrackedApplication["api"] | null = null, error = "";
     try {
       if (rateLimited) fail("RATE_LIMITED", "İstek sınırı nedeniyle başvuru detayı alınamadı. Başvuruları yenile ile daha sonra deneyin.");
@@ -105,7 +113,7 @@ async function importApplications(account: Account, pageNumber: number, seenJobI
       api = normalizeApplication({ isCandidateAppliedJob: true }, detail.data, Date.now());
     } catch (cause) {
       account.guard(); const failure = dashboardFailure(cause);
-      if (failure.code === "AUTH_REQUIRED") throw cause;
+      if (["AUTH_REQUIRED", "ACCESS_DENIED"].includes(failure.code)) throw cause;
       if (failure.code === "RATE_LIMITED") { rateLimited = true; summary.warning = "İstek sınırına ulaşıldı; alınan sayfa kaydedildi. Kalan başvurular için daha sonra tekrar içe aktarın."; }
       error = failure.message; summary.detailErrors++;
     }
@@ -123,7 +131,7 @@ async function importApplications(account: Account, pageNumber: number, seenJobI
       if (index < 0) { state.applications.push(next); summary.added++; }
       else { state.applications[index] = next; summary.updated++; }
     }
-    if (!rateLimited && !summary.warning && pageNumber * IMPORT_PAGE_SIZE < page.total && state.applications.length < 500) summary.nextPage = pageNumber + 1;
+    if (boundary < 0 && !rateLimited && !summary.warning && pageNumber * IMPORT_PAGE_SIZE < page.total && state.applications.length < 500) summary.nextPage = pageNumber + 1;
     if (!summary.warning && state.applications.length >= 500 && pageNumber * IMPORT_PAGE_SIZE < page.total)
       summary.warning = "500 takip kaydı sınırına ulaşıldı; içe aktarma burada durdu.";
   });
@@ -202,7 +210,7 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
       account.guard(); errors++;
       const failure = dashboardFailure(error);
       await account.transaction(s => { s.resumeViews.error = failure.message; });
-      if (["AUTH_REQUIRED", "RATE_LIMITED"].includes(failure.code))
+      if (["AUTH_REQUIRED", "ACCESS_DENIED", "RATE_LIMITED"].includes(failure.code))
         return { ok: true as const, data: await readState(account), notice: failure.message, scope: account.scope };
     }
     for (const app of state.applications) {
@@ -222,7 +230,7 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
         account.guard(); errors++;
         const failure = dashboardFailure(error);
         await account.transaction(s => { const current = s.applications.find(a => a.jobId === app.jobId); if (current) current.api.error = failure.message; });
-        if (["AUTH_REQUIRED", "RATE_LIMITED"].includes(failure.code)) { notice = failure.message; break; }
+        if (["AUTH_REQUIRED", "ACCESS_DENIED", "RATE_LIMITED"].includes(failure.code)) { notice = failure.message; break; }
       }
     }
     if (!notice) notice = errors ? errors + " kayıt güncellenemedi; önceki verileri korundu." : "Başvuru bilgileri güncellendi.";

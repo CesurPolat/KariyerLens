@@ -12,6 +12,7 @@ export function attachDashboardAutoConnect(port: chrome.runtime.Port, verify: (s
   let ownedTabId: number | undefined;
   let creating = false;
   const earlyCaptures = new Map<number, string>();
+  const checkedBearers = new Set<string>();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let unsubscribe = () => {};
 
@@ -23,6 +24,7 @@ export function attachDashboardAutoConnect(port: chrome.runtime.Port, verify: (s
     unsubscribe();
     chrome.tabs.onRemoved.removeListener(onRemoved);
     earlyCaptures.clear();
+    checkedBearers.clear();
   }
   function post(event: AutoConnectEvent) {
     if (closed) return;
@@ -38,14 +40,21 @@ export function attachDashboardAutoConnect(port: chrome.runtime.Port, verify: (s
 
   async function check(initial = false, expectedBearer?: string) {
     if (closed || awaitingApplied) return;
+    const bearer = initial ? getKariyerCredentials(CANDIDATE).bearer : expectedBearer;
+    // Repeated requests carrying the same rejected session cannot schedule another verification.
+    if (bearer && checkedBearers.has(bearer)) return;
     if (verifying) { queued = true; queuedBearer = expectedBearer; return; }
     // A different site tab must not replace the account this attempt is verifying.
     if (!initial && expectedBearer !== getKariyerCredentials(CANDIDATE).bearer) return;
+    if (!initial && bearer) checkedBearers.add(bearer);
     verifying = true;
     try {
       const result = await verify(controller.signal);
       if (closed) return;
-      if (!initial && expectedBearer !== getKariyerCredentials(CANDIDATE).bearer) return;
+      if (!initial && expectedBearer !== getKariyerCredentials(CANDIDATE).bearer) {
+        if (bearer) checkedBearers.delete(bearer);
+        return;
+      }
       if (result.ok) {
         awaitingApplied = true;
         post({ type: "connected", result });

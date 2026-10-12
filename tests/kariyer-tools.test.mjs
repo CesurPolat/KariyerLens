@@ -120,7 +120,7 @@ test("session fields and signed links are removed; large responses indicate trun
 });
 
 test("HTTP, malformed JSON and network errors return safe failures", async () => {
-  for (const [response, code] of [[new Response("secret", { status: 401 }), "AUTH_REQUIRED"], [new Response("secret", { status: 429 }), "RATE_LIMITED"], [new Response("secret", { status: 500 }), "HTTP_ERROR"], [new Response("<html>secret</html>"), "INVALID_RESPONSE"], [new Response("bad", { headers: { "Content-Type": "application/json" } }), "INVALID_RESPONSE"]]) {
+  for (const [response, code] of [[new Response("secret", { status: 401 }), "AUTH_REQUIRED"], [new Response("secret", { status: 403 }), "ACCESS_DENIED"], [new Response("secret", { status: 429 }), "RATE_LIMITED"], [new Response("secret", { status: 500 }), "HTTP_ERROR"], [new Response("<html>secret</html>"), "INVALID_RESPONSE"], [new Response("bad", { headers: { "Content-Type": "application/json" } }), "INVALID_RESPONSE"]]) {
     const result = await callKariyerTool("get_resumes", {}, "123", credentials, async () => response);
     assert.equal(result.code, code); assert.doesNotMatch(JSON.stringify(result), /secret/);
   }
