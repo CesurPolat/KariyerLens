@@ -211,7 +211,7 @@ test("reordered application interactions do not create duplicate history", () =>
   assert.equal(mergeApplication(app, reversed).api.events.length, 2);
 });
 
-test("import stops immediately at the first saved job without fetching its details", async () => {
+test("import stops immediately at the first confirmed application without fetching its details", async () => {
   const before = (await invoke({ action: "get" })).data.applications.find(a => a.jobId === "123");
   const scope = await accountScope(currentId);
   const pageCalls = importRequests.length, detailCalls = detailRequests.length;
@@ -231,6 +231,7 @@ test("import adds only jobs before a known boundary, including a boundary on the
     const scope = await accountScope(currentId);
     await transactDashboard(scope, () => {}, state => {
       state.applications.push(newTrackedApplication({ jobId: "123", title: "Mevcut", companyName: "", jobUrl: "" }));
+      Object.assign(state.applications[0].api, { applied: true, fetchedAt: Date.now() });
     });
     importPages = [Array.from({ length: 12 }, (_, i) => 700 + i), [711, 712, 123, 713]];
     const pageCalls = importRequests.length, detailCalls = detailRequests.length;
@@ -320,6 +321,61 @@ test("import stops repeated API pages and respects the 500 record limit without 
     assert.equal(full.importSummary.nextPage, null); assert.match(full.importSummary.warning, /500/);
     assert.ok(full.data.applications.some(a => a.jobId === "10498"));
   } finally { importMode = "ok"; currentId = "101"; capture("Bearer import-restored"); }
+});
+
+test("saved jobs and failed detail imports do not stop discovery of older applications", async () => {
+  try {
+    currentId = "916"; capture("Bearer saved-import");
+    const scope = await accountScope(currentId);
+    await transactDashboard(scope, () => {}, state => {
+      const app = newTrackedApplication({ jobId: "123", title: "Saved", companyName: "", jobUrl: "" });
+      app.notes = "Keep my note"; state.applications.push(app);
+    });
+    const first = await invoke({ action: "importApplications" });
+    assert.equal(first.importSummary.updated, 1); assert.equal(first.importSummary.added, 11);
+    assert.equal(first.importSummary.nextPage, 2);
+    const saved = first.data.applications.find(a => a.jobId === "123");
+    assert.equal(saved.notes, "Keep my note"); assert.equal(saved.api.applied, true); assert.ok(saved.api.fetchedAt);
+    const next = await invoke({ action: "importApplications", page: 2, seenJobIds: first.importSummary.jobIds });
+    assert.equal(next.importSummary.added, 2);
+    currentId = "917"; capture("Bearer retry-details"); detailMode = "missing";
+    await invoke({ action: "importApplications" }); detailMode = "ok";
+    const retried = await invoke({ action: "importApplications" });
+    assert.equal(retried.importSummary.updated, 12); assert.equal(retried.importSummary.nextPage, 2);
+    assert.ok(retried.data.applications.every(a => a.api.fetchedAt !== null));
+  } finally { currentId = "101"; capture("Bearer import-restored"); detailMode = "ok"; }
+});
+
+test("an existing saved job can be updated at capacity without losing local fields", async () => {
+  try {
+    currentId = "918"; capture("Bearer capacity-update");
+    await transactDashboard(await accountScope(currentId), () => {}, state => {
+      const saved = newTrackedApplication({ jobId: "123", title: "Saved", companyName: "", jobUrl: "" });
+      saved.notes = "Keep";
+      state.applications = [saved, ...Array.from({ length: 499 }, (_, i) => ({ ...structuredClone(saved), jobId: String(20000 + i) }))];
+    });
+    const result = await invoke({ action: "importApplications" });
+    assert.equal(result.importSummary.updated, 1); assert.equal(result.importSummary.added, 0);
+    assert.equal(result.data.applications.length, 500);
+    assert.equal(result.data.applications[0].notes, "Keep"); assert.ok(result.data.applications[0].api.fetchedAt);
+  } finally { currentId = "101"; capture("Bearer import-restored"); }
+});
+
+test("milestones can be corrected explicitly while terminal statuses retain real history", async () => {
+  try {
+    currentId = "919"; capture("Bearer milestone-correction");
+    let app = (await invoke({ action: "track", jobId: "123" })).data.applications[0];
+    app = (await invoke({ action: "update", jobId: "123", patch: { ...patch(app), status: "offer" } })).data.applications[0];
+    assert.equal(app.interviewed, true); assert.equal(app.offered, true);
+    app = (await invoke({ action: "update", jobId: "123", patch: { ...patch(app), status: "rejected" } })).data.applications[0];
+    assert.equal(app.interviewed, true); assert.equal(app.offered, true);
+    app = (await invoke({ action: "update", jobId: "123", patch: { ...patch(app), status: "applied", interviewed: false, offered: false } })).data.applications[0];
+    assert.equal(app.interviewed, false); assert.equal(app.offered, false);
+    const metrics = experimentMetrics([{ ...app, variantId: "A" }], "A");
+    assert.equal(metrics.interviewed.count, 0); assert.equal(metrics.offered.count, 0);
+    app = (await invoke({ action: "update", jobId: "123", patch: { ...patch(app), status: "offer", interviewed: false, offered: false } })).data.applications[0];
+    assert.equal(app.interviewed, true); assert.equal(app.offered, true);
+  } finally { currentId = "101"; capture("Bearer import-restored"); }
 });
 
 test("missing captured session is distinguished from rejected login and personal state stays inaccessible", async () => {

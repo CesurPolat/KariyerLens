@@ -73,6 +73,7 @@ export const emptyDashboard = (): DashboardState => ({ version: 2, applications:
 const dateInput = z.string().regex(/^$|^\d{4}-\d{2}-\d{2}$/);
 export const applicationPatchSchema = z.object({ status: z.enum(applicationStatuses), appliedAt: dateInput, notes: text,
   followUpAt: dateInput, variantId: z.string().max(100), responded: z.boolean(),
+  interviewed: z.boolean().optional(), offered: z.boolean().optional(),
   manualEvents: z.array(eventSchema.extend({ source: z.literal("manual") })).max(100) }).strict();
 export const dashboardMessageSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("get") }).strict(),

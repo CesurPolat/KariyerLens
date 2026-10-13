@@ -4,6 +4,7 @@ import type { Job, JobResult } from "../types.js";
 import { jobUrlFor, jobReferenceFromUrl } from "../job-provider.js";
 import { ensureIskurOriginRemoved } from "./iskur-request-headers.js";
 import type { JobDiscoveryPreferences, DiscoveryJob } from "../../dashboard/models.js";
+import { resolveSharedFilters } from "../../dashboard/discovery-filters.js";
 
 const ORIGIN = "https://esube.iskur.gov.tr";
 const SEARCH_URL = ORIGIN + "/Istihdam/AcikIsIlanAra.aspx";
@@ -175,12 +176,18 @@ async function request(url: string, body = new URLSearchParams({ __LASTFOCUS: ""
   } finally { clearTimeout(timer); }
 }
 export async function searchIskur(preferences: JobDiscoveryPreferences, page: number, scope: string, signal?: AbortSignal, fetcher: typeof fetch = fetch): Promise<IskurPage> {
-  const key = JSON.stringify([scope, preferences.keyword, preferences.includeOlder, preferences.iskur]);
+  const key = JSON.stringify([scope, preferences.keyword, preferences.includeOlder, preferences.iskur, preferences.filters]);
   let session = sessions.get(key);
   if (!session || page === 1 || Date.now() - session.touched > 10 * 60_000) {
     const latest = [...sessions.values()].reverse().find(s => s.scope === scope && Date.now() - s.touched <= 10 * 60_000);
     const initial = latest?.html ?? await request(SEARCH_URL, undefined, signal, fetcher);
-    const html = await request(SEARCH_URL, iskurSearchBody(initial, preferences), signal, fetcher);
+    let filters: ReturnType<typeof resolveSharedFilters>;
+    try { filters = resolveSharedFilters(preferences, "iskur", { cities: readIskurForm(initial).provinces, workModels: [], workTypes: [] }); }
+    catch (error) {
+      if (error instanceof IskurError) throw error;
+      fail("INVALID_ARGUMENTS", error instanceof Error ? error.message : "Ortak filtreler geçersiz.");
+    }
+    const html = await request(SEARCH_URL, iskurSearchBody(initial, { ...preferences, iskur: filters.iskur }), signal, fetcher);
     session = { html, page: 1, touched: Date.now(), scope };
   }
   let result = parseIskurSearch(session.html, session.page);

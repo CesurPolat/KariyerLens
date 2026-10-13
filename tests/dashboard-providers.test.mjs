@@ -5,6 +5,7 @@ import { handleDashboard, analyzeDashboard } from "../src/dashboard/service.ts";
 import { emptyDashboard } from "../src/dashboard/models.ts";
 import { accountScope } from "../src/dashboard/store.ts";
 import { captureKariyerSession } from "../src/shared/kariyer/kariyer-session.ts";
+import { resetIskurSessionForms } from "../src/shared/iskur/iskur-api.ts";
 
 const db = {}, requests = [];
 let mode = "ok", accountId = "98989", providerBody;
@@ -123,6 +124,22 @@ test("a missing province in a fresh catalog preserves previous jobs without issu
   assert.deepEqual(result.data.discovery.jobs, first.data.discovery.jobs);
   assert.equal(result.data.discovery.fetchedAt, first.data.discovery.fetchedAt);
   assert.equal(requests.filter(r => r.url.pathname === "/search").length, 1);
+});
+
+test("enabling İŞKUR with a selected shared province loads its form before mapping filters", async () => {
+  resetIskurSessionForms();
+  const prefs = { ...emptyDashboard().preferences, providers: ["kariyer"], filters: { province: "", employmentType: "" } };
+  await invoke({ action: "search", preferences: prefs, page: 1 }); requests.length = 0;
+  const reply = await invoke({ action: "search", preferences: { ...prefs, providers: ["kariyer", "iskur"], filters: { province: "istanbul", employmentType: "full-time" } }, page: 1 });
+  assert.equal(reply.data.iskurDiscovery.error, ""); assert.equal(reply.data.iskurDiscovery.jobs.length, 1);
+  const bodies = searchCalls("esube.iskur.gov.tr").map(r => new URLSearchParams(r.options.body));
+  assert.equal(bodies.length, 2); assert.equal(bodies[0].has("__EVENTTARGET"), false);
+  assert.equal(bodies[1].get("ctl04$ctlIl"), "34"); assert.equal(bodies[1].get("ctl04$ctlCalismaSekli"), "1");
+  requests.length = 0;
+  const missing = await invoke({ action: "search", preferences: { ...prefs, providers: ["iskur"], filters: { province: "unknown", employmentType: "" } }, page: 1 });
+  assert.match(missing.data.iskurDiscovery.error, /Seçilen il/);
+  assert.deepEqual(missing.data.iskurDiscovery.jobs, reply.data.iskurDiscovery.jobs);
+  assert.equal(searchCalls("esube.iskur.gov.tr").length, 0);
 });
 test("same numeric identifiers remain separate through tracking, editing, deletion and account changes", async () => {
   const jobId = "00000000123";

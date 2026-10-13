@@ -83,7 +83,8 @@ const appliedJobPageSchema = z.object({ total: z.number().int().nonnegative(), p
 async function importApplications(account: Account, pageNumber: number, seenJobIds: string[]): Promise<ApplicationImportSummary> {
   const state = await readState(account);
   const seen = new Set(seenJobIds);
-  const existing = new Set(state.applications.filter(a => a.provider === "kariyer").map(a => a.jobId).filter(id => !seen.has(id)));
+  const tracked = new Set(state.applications.filter(a => a.provider === "kariyer").map(a => a.jobId));
+  const existing = new Set(state.applications.filter(a => a.provider === "kariyer" && a.api.applied === true && a.api.fetchedAt !== null).map(a => a.jobId).filter(id => !seen.has(id)));
   const result = await account.call("search_jobs", { memberId: Number(account.candidateId), jobProperties: ["5"],
     isSearchFromProfilePage: true, dontShowAppliedJobs: false, currentPage: pageNumber, size: IMPORT_PAGE_SIZE }, "", projectAppliedJobs);
   const parsed = appliedJobPageSchema.safeParse(result.data);
@@ -101,7 +102,12 @@ async function importApplications(account: Account, pageNumber: number, seenJobI
   const boundary = jobs.findIndex(job => existing.has(job.jobId));
   const remaining = Math.max(0, 500 - state.applications.length);
   const newJobs = (boundary < 0 ? jobs : jobs.slice(0, boundary)).filter(job => !seen.has(job.jobId));
-  const pending = newJobs.slice(0, remaining);
+  let available = remaining;
+  const pending = newJobs.filter(job => {
+    if (tracked.has(job.jobId)) return true;
+    if (!available) return false;
+    available--; return true;
+  });
   if (pending.length < newJobs.length) summary.warning = "500 takip kaydı sınırına ulaşıldı. Yeni kayıtlar için listede yer açın.";
   const snapshots: { job: typeof jobs[number]; api: TrackedApplication["api"] | null; error: string }[] = [];
   let rateLimited = false;
@@ -185,7 +191,7 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
     Object.assign(app, patch);
     if (changedStatus) app.statusManual = true;
     if (patch.status !== "saved" && !app.appliedAt) app.appliedAt = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Istanbul" });
-    if (patch.status === "interview" || patch.status === "offer") app.interviewed = true;
+    if (patch.status === "interview" || patch.status === "offer" || app.offered) app.interviewed = true;
     if (patch.status === "offer") app.offered = true;
     if (changedStatus && app.manualEvents.length >= 100) app.manualEvents.shift();
     if (changedStatus) app.manualEvents.push({ id: crypto.randomUUID(), text: "Süreç: " + statusLabels[patch.status], at: new Date().toISOString(), viewed: false, source: "manual" });
@@ -265,15 +271,15 @@ export async function handleDashboard(input: unknown, expectedScope?: unknown, r
         const refreshedChoices = choices;
         await account.transaction(s => { s.discovery.options = refreshedChoices; });
       }
-      let filters: ReturnType<typeof resolveSharedFilters>;
-      try { filters = resolveSharedFilters(prefs, provider, choices); }
-      catch (error) { fail("INVALID_ARGUMENTS", error instanceof Error ? error.message : "Ortak filtreler geçersiz."); }
       if (provider === "iskur") {
-        const page = await searchIskur({ ...prefs, iskur: filters.iskur }, request.page, account.scope, signal); account.guard();
+        const page = await searchIskur(prefs, request.page, account.scope, signal); account.guard();
         return { provider, prefs, page: discoverySchema.parse({ ...emptyDiscovery(), jobs: page.jobs, fetchedAt: now, currentPage: request.page,
           total: page.total, totalKnown: page.totalKnown, hasNext: page.hasNext, appliedPreferences: prefs,
           options: { cities: page.provinces, workModels: [] } }) };
       }
+      let filters: ReturnType<typeof resolveSharedFilters>;
+      try { filters = resolveSharedFilters(prefs, provider, choices); }
+      catch (error) { fail("INVALID_ARGUMENTS", error instanceof Error ? error.message : "Ortak filtreler geçersiz."); }
       for (const [values, available] of [[filters.cities, choices.cities], [prefs.workModels, choices.workModels]] as const)
         if (values.some(id => !available.some(o => o.id === id))) fail("INVALID_ARGUMENTS", "Filtre seçenekleri güncel değil. Önce filtresiz yenileyin.");
       const result = await account.call("search_jobs", { memberId: Number(account.candidateId), jobProperties: ["1"],
